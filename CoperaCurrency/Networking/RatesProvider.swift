@@ -11,6 +11,19 @@ protocol RatesProvider: Sendable {
     /// Implementations may return a superset or subset of `codes` depending on
     /// what the backend provides; callers should only rely on requested codes.
     func fetchUSDPerUnit(for codes: Set<String>) async throws -> [String: Double]
+
+    /// The backend's reported "as-of" date for the given codes, if it exposes
+    /// one (e.g. Fawaz's daily `date` field). Used by the store to roll the 24h
+    /// baseline when the source's day changes.
+    ///
+    /// Defaults to `nil` (date unknown); only date-bearing providers override it.
+    /// Errors are swallowed to `nil` so this can never break a refresh.
+    func fetchAsOfDate(for codes: Set<String>) async -> String?
+}
+
+extension RatesProvider {
+    /// Default: the provider has no notion of an "as-of" date.
+    func fetchAsOfDate(for codes: Set<String>) async -> String? { nil }
 }
 
 /// Errors surfaced by the built-in providers.
@@ -126,6 +139,12 @@ struct FawazFiatProvider: RatesProvider {
     func fetchDatedRates() async throws -> (date: String, usdPerUnit: [String: Double]) {
         let data = try await fetchData()
         return try Self.decode(data)
+    }
+
+    /// Surface Fawaz's daily `date` so the store can roll the 24h baseline when
+    /// the source's day changes. Failures are swallowed to `nil`.
+    func fetchAsOfDate(for codes: Set<String>) async -> String? {
+        (try? await fetchDatedRates())?.date
     }
 
     private func fetchData() async throws -> Data {

@@ -1,4 +1,6 @@
+import AppKit
 import Foundation
+import Network
 import Observation
 
 /// How often the rates auto-refresh loop runs.
@@ -49,6 +51,16 @@ final class RatesStore {
 
     /// Handle to the running refresh loop, if any.
     private var refreshTask: Task<Void, Never>?
+
+    /// Observes `NSWorkspace.didWakeNotification` so we can refresh on wake.
+    private var wakeObserver: NSObjectProtocol?
+    /// Monitors network reachability so we can refresh when connectivity returns.
+    private var pathMonitor: NWPathMonitor?
+    /// Serial queue the path monitor delivers callbacks on (off the main actor).
+    private let pathMonitorQueue = DispatchQueue(label: "com.copera.currency.path-monitor")
+    /// Whether the last observed network path was satisfied, used to fire a
+    /// refresh only on the unsatisfied → satisfied edge (not every callback).
+    private var lastPathSatisfied = true
 
     // MARK: - Init
 
@@ -105,13 +117,18 @@ final class RatesStore {
         let lastFiat = persistence.loadLastFiatFetch()
         let shouldFetchFiat = lastFiat.map { now.timeIntervalSince($0) >= 3600 } ?? true
 
-        // Kick off concurrent fetches.
+        // Kick off concurrent fetches. The fiat "as-of" date (Fawaz exposes one)
+        // rides along so the daily baseline can roll on a source day-change.
         async let fiatResult: [String: Double]? = shouldFetchFiat
             ? Self.tryFetch(fiatProvider, codes: requestedCodes)
+            : nil
+        async let fiatDateResult: String? = shouldFetchFiat
+            ? fiatProvider.fetchAsOfDate(for: requestedCodes)
             : nil
         async let cryptoResult: [String: Double]? = Self.tryFetch(cryptoProvider, codes: requestedCodes)
 
         let fiatMap = await fiatResult
+        let fetchedFiatDate = await fiatDateResult
         let cryptoMap = await cryptoResult
 
         let fiatFetchSucceeded = fiatMap != nil
@@ -159,9 +176,9 @@ final class RatesStore {
         // USD is the normalization anchor: always 1 USD per USD.
         merged["USD"] = 1
 
-        // Resolve the fiat date (new fetch may not expose it through the
-        // protocol; fall back to the previous value).
-        let resolvedFiatDate = fiatDate
+        // Resolve the fiat date: prefer a freshly-fetched one (Fawaz), else keep
+        // the previous value. A changed date rolls the 24h baseline below.
+        let resolvedFiatDate = fetchedFiatDate ?? fiatDate
 
         // Roll the daily baseline forward if needed, then compute 24h changes.
         let baseline = Self.resolvedBaseline(
@@ -420,7 +437,8 @@ final class RatesStore {
 
     // MARK: - Refresh loop
 
-    /// Start the auto-refresh loop. Cancels any existing loop first.
+    /// Start the auto-refresh loop and the wake / network-restored triggers.
+    /// Cancels any existing loop / subscriptions first.
     func startTimer() {
         stop()
         refreshTask = Task { [weak self] in
@@ -435,11 +453,70 @@ final class RatesStore {
                 await self.refresh()
             }
         }
+
+        startWakeObserver()
+        startPathMonitor()
     }
 
-    /// Stop the auto-refresh loop.
+    /// Stop the auto-refresh loop and tear down the wake / network triggers.
     func stop() {
         refreshTask?.cancel()
         refreshTask = nil
+
+        if let wakeObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(wakeObserver)
+            self.wakeObserver = nil
+        }
+
+        pathMonitor?.cancel()
+        pathMonitor = nil
+    }
+
+    // MARK: - Wake / network-restored triggers
+
+    /// Refresh when the machine wakes from sleep (cached data is likely stale).
+    ///
+    /// The notification handler is delivered on an arbitrary thread and is
+    /// `nonisolated`, so it hops back to the main actor before touching `self`.
+    private func startWakeObserver() {
+        wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification,
+            object: nil,
+            queue: nil
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                await self?.refresh()
+            }
+        }
+    }
+
+    /// Refresh when connectivity returns, but only on the unsatisfied →
+    /// satisfied transition so we don't refresh on every path callback.
+    ///
+    /// The monitor's handler runs on `pathMonitorQueue` (off the main actor); the
+    /// edge decision is a pure function, and the refresh hops to the main actor.
+    private func startPathMonitor() {
+        let monitor = NWPathMonitor()
+        // Seed from the monitor's current status so a cold start that is already
+        // online doesn't immediately count as a restore.
+        lastPathSatisfied = monitor.currentPath.status == .satisfied
+        monitor.pathUpdateHandler = { [weak self] path in
+            let satisfied = path.status == .satisfied
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                if Self.networkRestored(was: self.lastPathSatisfied, now: satisfied) {
+                    await self.refresh()
+                }
+                self.lastPathSatisfied = satisfied
+            }
+        }
+        pathMonitor = monitor
+        monitor.start(queue: pathMonitorQueue)
+    }
+
+    /// Pure edge-detector: a network "restore" is the unsatisfied → satisfied
+    /// transition. Returns `false` while already online or while still offline.
+    nonisolated static func networkRestored(was previous: Bool, now current: Bool) -> Bool {
+        !previous && current
     }
 }

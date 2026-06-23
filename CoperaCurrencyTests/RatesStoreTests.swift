@@ -142,6 +142,64 @@ struct RatesStoreTests {
         #expect(reloaded.first { $0.id == 6 }?.isTracked == true)
     }
 
+    // MARK: network-restored edge
+
+    @Test func networkRestoredOnlyFiresOnUnsatisfiedToSatisfiedEdge() {
+        // Restore edge: was offline, now online.
+        #expect(RatesStore.networkRestored(was: false, now: true) == true)
+        // Still online → no refresh.
+        #expect(RatesStore.networkRestored(was: true, now: true) == false)
+        // Went offline → no refresh.
+        #expect(RatesStore.networkRestored(was: true, now: false) == false)
+        // Still offline → no refresh.
+        #expect(RatesStore.networkRestored(was: false, now: false) == false)
+    }
+
+    // MARK: Fawaz date-aware baseline roll
+
+    @Test func baselineRollsWhenFiatDateChanges() {
+        let now = ["USD": 1.0, "BRL": 0.20]
+        let stored = RatesSnapshot(
+            rates: ["USD": NormalizedRate(usdPerUnit: 1, change24h: 0),
+                    "BRL": NormalizedRate(usdPerUnit: 0.1845, change24h: 0)],
+            updatedAt: Date(), // fresh (not age-expired)
+            fiatDate: "2025-06-01"
+        )
+
+        // Same date → no roll, diff against stored.
+        let same = RatesStore.resolvedBaseline(now: now, stored: stored, newFiatDate: "2025-06-01", at: Date())
+        #expect(same.didRoll == false)
+        #expect(same.snapshot.rates["BRL"]?.usdPerUnit == 0.1845)
+
+        // New date → roll forward to current data.
+        let rolled = RatesStore.resolvedBaseline(now: now, stored: stored, newFiatDate: "2025-06-02", at: Date())
+        #expect(rolled.didRoll == true)
+        #expect(rolled.snapshot.rates["BRL"]?.usdPerUnit == 0.20)
+        #expect(rolled.snapshot.fiatDate == "2025-06-02")
+    }
+
+    @Test func refreshSurfacesFiatAsOfDate() async {
+        // A provider that exposes an as-of date via the protocol default override.
+        struct DatedFiatProvider: RatesProvider {
+            let map: [String: Double]
+            let date: String
+            func fetchUSDPerUnit(for codes: Set<String>) async throws -> [String: Double] { map }
+            func fetchAsOfDate(for codes: Set<String>) async -> String? { date }
+        }
+
+        let (defaults, suite) = TestSupport.freshDefaults()
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let persistence = PersistenceStore(suiteName: suite)
+        let store = RatesStore(
+            fiatProvider: DatedFiatProvider(map: ["USD": 1, "BRL": 0.20], date: "2025-06-10"),
+            cryptoProvider: MockRatesProvider(map: ["BTC": 67842]),
+            persistence: persistence
+        )
+
+        await store.refresh()
+        #expect(store.fiatDate == "2025-06-10")
+    }
+
     @Test func trackedSortedPutsFavoritesFirst() {
         let env = makeStore(fiat: MockRatesProvider(), crypto: MockRatesProvider())
         defer { env.defaults.removePersistentDomain(forName: env.suite) }

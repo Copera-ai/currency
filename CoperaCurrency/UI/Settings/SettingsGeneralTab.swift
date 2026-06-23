@@ -59,6 +59,11 @@ struct SettingsGeneralTab: View {
                 AppToggle(isOn: launchBinding)
             }
         }
+        // Re-read the system's login-item status on appear so the toggle reflects
+        // changes the user made in System Settings → Login Items, not just init.
+        .onAppear {
+            launchAtLogin = LoginItemManager.isEnabled
+        }
         .alert(
             "Couldn’t update Login Items",
             isPresented: Binding(

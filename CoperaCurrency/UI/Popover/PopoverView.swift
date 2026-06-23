@@ -32,6 +32,7 @@ struct PopoverView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
+            statusBanner
             converterCard
             sectionSeparator
             tracking
@@ -64,11 +65,19 @@ struct PopoverView: View {
                     .font(.system(size: 15, weight: .bold))
                     .tracking(-0.2)
                     .foregroundStyle(theme.text)
-                // Live "Updated Ns ago" — re-evaluated every second.
+                // Live "Updated Ns ago" — re-evaluated every second. When the
+                // data is stale (a refresh failed) it's muted/amber with a dot.
                 TimelineView(.periodic(from: .now, by: 1)) { _ in
-                    Text(store.relativeUpdatedLabel())
-                        .font(.system(size: 11))
-                        .foregroundStyle(theme.text2)
+                    HStack(spacing: 5) {
+                        if isStale {
+                            Circle()
+                                .fill(staleColor)
+                                .frame(width: 5, height: 5)
+                        }
+                        Text(updatedLabel)
+                            .font(.system(size: 11))
+                            .foregroundStyle(isStale ? staleColor : theme.text2)
+                    }
                 }
             }
             Spacer()
@@ -84,6 +93,68 @@ struct PopoverView: View {
         .padding(.horizontal, 14)
         .padding(.top, 14)
         .padding(.bottom, 8)
+    }
+
+    // MARK: - Status (offline / error) banner & state helpers
+
+    /// Amber accent for the stale/offline state (warm, scheme-independent).
+    private var staleColor: Color { Color(hex: 0xE0902F) }
+
+    /// True when the last refresh failed but cached data is still shown.
+    private var isStale: Bool {
+        if case .stale = store.loadState { return true }
+        return false
+    }
+
+    /// The "Updated …" text; loading with no data yet reads as a placeholder.
+    private var updatedLabel: String {
+        if store.loadState == .loading && store.lastUpdated == nil {
+            return "Loading rates…"
+        }
+        return store.relativeUpdatedLabel()
+    }
+
+    /// An inline message for offline / error states, or `nil` to hide the banner.
+    private var bannerMessage: String? {
+        switch store.loadState {
+        case .offline:
+            return store.lastUpdated == nil
+                ? "Offline — no rates yet"
+                : "Offline — showing last update"
+        case .error(let message):
+            return message.isEmpty ? "Couldn’t update rates" : message
+        default:
+            return nil
+        }
+    }
+
+    /// A small inline banner (offline / error) with a Retry button. Hidden in
+    /// the loading / loaded / stale states.
+    @ViewBuilder
+    private var statusBanner: some View {
+        if let bannerMessage {
+            HStack(spacing: 8) {
+                Image(systemName: "wifi.slash")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(staleColor)
+                Text(bannerMessage)
+                    .font(.system(size: 11))
+                    .foregroundStyle(theme.text)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Spacer(minLength: 6)
+                Button("Retry") { Task { await store.refresh() } }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Color.accentColor)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(RoundedRectangle(cornerRadius: 9).fill(staleColor.opacity(0.12)))
+            .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(staleColor.opacity(0.28), lineWidth: hairline))
+            .padding(.horizontal, 14)
+            .padding(.bottom, 8)
+        }
     }
 
     // MARK: - Converter
