@@ -3,46 +3,64 @@ import SwiftUI
 
 /// Boots the menu-bar app and owns the top-level AppKit objects.
 ///
-/// Phase 0 wires up a single smoke-test `NSStatusItem` to prove the full stack
-/// (LSUIElement + NSStatusItem + NSHostingView + SwiftUI + arm64 + Swift 6)
-/// works end to end. Later phases replace this with the real
-/// `MenuBarController` / `RatesStore` / `UpdaterManager`.
+/// On launch it runs as a menu-bar-only agent (`.accessory`), constructs the data
+/// store + settings, wires the popover / status-item controllers / settings
+/// window, kicks off the first refresh, and starts the auto-refresh loop.
+///
+/// Strong references to every controller are held here — without them the status
+/// items (and their `NSStatusItem`s) would be released and vanish.
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    /// Strong reference to the status item — without it, the item is released
-    /// and silently disappears from the menu bar.
-    private var statusItem: NSStatusItem?
+    private var store: RatesStore?
+    private var settings: AppSettings?
+    private var popoverController: PopoverController?
+    private var menuBarController: MenuBarController?
+    private var settingsWindowController: SettingsWindowController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // Menu-bar-only: no Dock icon, no app menu focus stealing.
+        // Menu-bar-only: no Dock icon, no app-menu focus stealing.
         NSApp.setActivationPolicy(.accessory)
-        installSmokeTestStatusItem()
+
+        // Data layer: real providers + standard-defaults persistence.
+        let store = RatesStore(
+            fiatProvider: FawazFiatProvider(),
+            cryptoProvider: CoinbaseCryptoProvider(),
+            persistence: PersistenceStore()
+        )
+        let settings = AppSettings()
+
+        // Shared popover + settings window.
+        let popoverController = PopoverController(store: store, settings: settings)
+        let settingsWindowController = SettingsWindowController(popoverController: popoverController)
+
+        // Menu-bar items, driven by the store's tracked pairs.
+        let menuBarController = MenuBarController(
+            store: store,
+            settings: settings,
+            popoverController: popoverController,
+            onOpenSettings: { settingsWindowController.show() }
+        )
+
+        self.store = store
+        self.settings = settings
+        self.popoverController = popoverController
+        self.settingsWindowController = settingsWindowController
+        self.menuBarController = menuBarController
+
+        menuBarController.start()
+
+        // First refresh, then begin the auto-refresh loop.
+        Task {
+            await store.refresh()
+            #if DEBUG
+            print("[CoperaCurrency] first refresh complete — rates: \(store.rates.count), state: \(store.loadState)")
+            fflush(stdout) // ensure the line reaches a non-TTY pipe during smoke tests
+            #endif
+            store.startTimer()
+        }
     }
 
-    private func installSmokeTestStatusItem() {
-        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        guard let button = item.button else { return }
-
-        let hosting = NSHostingView(rootView: StatusItemSmokeLabel())
-        hosting.translatesAutoresizingMaskIntoConstraints = false
-        button.addSubview(hosting)
-
-        NSLayoutConstraint.activate([
-            hosting.leadingAnchor.constraint(equalTo: button.leadingAnchor),
-            hosting.trailingAnchor.constraint(equalTo: button.trailingAnchor),
-            hosting.topAnchor.constraint(equalTo: button.topAnchor),
-            hosting.bottomAnchor.constraint(equalTo: button.bottomAnchor),
-        ])
-
-        statusItem = item
-    }
-}
-
-/// Minimal compact label rendered inside the status-item button via NSHostingView.
-private struct StatusItemSmokeLabel: View {
-    var body: some View {
-        Text("$ Copera")
-            .font(.system(size: 12, design: .monospaced))
-            .padding(.horizontal, 6)
+    func applicationWillTerminate(_ notification: Notification) {
+        store?.stop()
     }
 }
