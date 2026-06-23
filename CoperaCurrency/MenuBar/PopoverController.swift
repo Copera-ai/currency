@@ -9,9 +9,15 @@ import SwiftUI
 /// highlighted while the popover is open and un-highlighted on close (via the
 /// popover delegate).
 ///
-/// Phase 2 hosts a STUB content view (``PopoverStubView``) that lists the tracked
-/// pairs with live rates — enough to confirm wiring. Phase 3 swaps in the real
-/// `PopoverView` (see `setContent(_:)`).
+/// Phase 3 hosts the real ``PopoverView``. The content is an
+/// `NSHostingController` whose SwiftUI tree drives the popover's intrinsic height
+/// (368 wide) via `sizingOptions = .preferredContentSize`.
+///
+/// Vibrancy: the `NSPopover` already provides a vibrant backing, and the SwiftUI
+/// `PanelBackground` layers `.ultraThinMaterial` (or a solid fill when reduce-
+/// transparency is on) over it. This matches the design's translucent panel
+/// without the auto-sizing fragility of wrapping the hosting view in a manual
+/// `NSVisualEffectView` container.
 @MainActor
 final class PopoverController: NSObject, NSPopoverDelegate {
     /// Fixed popover width per the design (intrinsic height).
@@ -20,30 +26,47 @@ final class PopoverController: NSObject, NSPopoverDelegate {
     private let popover: NSPopover
     private let store: RatesStore
     private let settings: AppSettings
+    /// Opens the Settings window (threaded in from `AppDelegate`, since the
+    /// popover can't reach `SettingsWindowController` directly). Closes the
+    /// popover before opening.
+    private let onOpenSettings: () -> Void
 
     /// The button the popover is currently anchored to (for highlight bookkeeping).
     private weak var anchorButton: NSStatusBarButton?
 
-    init(store: RatesStore, settings: AppSettings) {
+    init(store: RatesStore, settings: AppSettings, onOpenSettings: @escaping () -> Void = {}) {
         self.store = store
         self.settings = settings
+        self.onOpenSettings = onOpenSettings
         self.popover = NSPopover()
         super.init()
 
         popover.behavior = .transient
         popover.animates = true
         popover.delegate = self
-        popover.contentViewController = makeStubContentController()
+        popover.contentViewController = makeContentController()
     }
 
-    /// Phase-2 stub content. Phase 3 replaces this with the real popover UI; the
-    /// controller only needs the hosting swap, not a behavioral change here.
-    private func makeStubContentController() -> NSViewController {
-        let controller = NSHostingController(
-            rootView: PopoverStubView(store: store, settings: settings)
+    /// Build the hosting controller for the real popover UI. The popover is sized
+    /// from the SwiftUI content's intrinsic size (width pinned to ``width``).
+    private func makeContentController() -> NSViewController {
+        let root = PopoverView(
+            store: store,
+            settings: settings,
+            onOpenSettings: { [weak self] in self?.openSettings() }
         )
-        controller.view.frame = NSRect(x: 0, y: 0, width: Self.width, height: 320)
-        return controller
+        .themedRoot(settings: settings)
+
+        let hosting = NSHostingController(rootView: root)
+        // Drive the popover's height from the SwiftUI content's intrinsic size.
+        hosting.sizingOptions = [.preferredContentSize]
+        return hosting
+    }
+
+    /// Close the popover, then open Settings.
+    private func openSettings() {
+        close()
+        onOpenSettings()
     }
 
     /// Show or hide the popover relative to the given status-item button.
@@ -84,64 +107,5 @@ final class PopoverController: NSObject, NSPopoverDelegate {
         // active button highlight.
         anchorButton?.highlight(false)
         anchorButton = nil
-    }
-}
-
-// MARK: - Stub content
-
-/// Phase-2 placeholder popover content: title + a live list of tracked pairs.
-///
-/// Reads the `@Observable` store so the rates/changes refresh live. Replaced by
-/// the real `PopoverView` in Phase 3.
-struct PopoverStubView: View {
-    let store: RatesStore
-    let settings: AppSettings
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Copera Currency")
-                .font(.headline)
-
-            Divider()
-
-            VStack(alignment: .leading, spacing: 8) {
-                ForEach(store.trackedSorted) { pair in
-                    PopoverStubRow(pair: pair, store: store)
-                }
-            }
-
-            Divider()
-
-            Text(store.relativeUpdatedLabel())
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-        .padding(16)
-        .frame(width: PopoverController.width, alignment: .leading)
-    }
-}
-
-/// A single tracked-pair row in the stub popover.
-private struct PopoverStubRow: View {
-    let pair: CurrencyPair
-    let store: RatesStore
-
-    var body: some View {
-        let change = store.change(pair)
-        let trend = Trend(change: change)
-
-        HStack {
-            Text("\(pair.base)/\(pair.quote)")
-                .font(.system(size: 13, weight: .medium))
-            Spacer()
-            Text(store.fmt(store.rate(pair)))
-                .font(.system(size: 13, design: .monospaced))
-                .monospacedDigit()
-            if let arrow = trend.arrow {
-                Text(arrow)
-                    .font(.system(size: 10))
-                    .foregroundStyle(trend == .up ? Color.green : Color.red)
-            }
-        }
     }
 }

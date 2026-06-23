@@ -29,9 +29,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         let settings = AppSettings()
 
-        // Shared popover + settings window.
-        let popoverController = PopoverController(store: store, settings: settings)
+        // Keep AppKit chrome (status-item labels, popover) in sync with the
+        // user's appearance preference.
+        AppearanceSync.apply(settings.appearance)
+
+        // Shared popover + settings window. The popover opens Settings via a
+        // forward-referenced controller (created just below) to break the cycle
+        // between the two controllers.
+        var openSettings: () -> Void = {}
+        let popoverController = PopoverController(
+            store: store,
+            settings: settings,
+            onOpenSettings: { openSettings() }
+        )
         let settingsWindowController = SettingsWindowController(popoverController: popoverController)
+        openSettings = { settingsWindowController.show() }
 
         // Menu-bar items, driven by the store's tracked pairs.
         let menuBarController = MenuBarController(

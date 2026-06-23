@@ -51,6 +51,8 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         window.delegate = self
         window.contentViewController = NSHostingController(
             rootView: SettingsPlaceholderView()
+            // Phase 4 swaps in the real settings root and applies
+            // `.themedRoot(settings:)` here so it honors appearance/accent.
         )
         window.setContentSize(Self.size)
         return window

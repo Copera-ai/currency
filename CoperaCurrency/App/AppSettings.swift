@@ -14,6 +14,9 @@ import Observation
 private enum SettingsKey {
     static let menuBarFormat = PersistenceStore.namespace + "menuBarFormat"
     static let showChangeInMenuBar = PersistenceStore.namespace + "showChangeInMenuBar"
+    static let appearance = PersistenceStore.namespace + "appearance"
+    static let accent = PersistenceStore.namespace + "accent"
+    static let reduceTransparency = PersistenceStore.namespace + "reduceTransparency"
 }
 
 @MainActor
@@ -32,6 +35,21 @@ final class AppSettings {
         didSet { defaults.set(showChangeInMenuBar, forKey: SettingsKey.showChangeInMenuBar) }
     }
 
+    /// Light / Dark / Auto appearance preference (default `.auto`).
+    var appearance: AppAppearance {
+        didSet { defaults.set(appearance.rawValue, forKey: SettingsKey.appearance) }
+    }
+
+    /// The app-wide accent color (default `.copper`, the design's `#D97757`).
+    var accent: AccentChoice {
+        didSet { defaults.set(accent.rawValue, forKey: SettingsKey.accent) }
+    }
+
+    /// When on, panels use a solid fill instead of a translucent material.
+    var reduceTransparency: Bool {
+        didSet { defaults.set(reduceTransparency, forKey: SettingsKey.reduceTransparency) }
+    }
+
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
 
@@ -47,5 +65,21 @@ final class AppSettings {
         } else {
             self.showChangeInMenuBar = true
         }
+
+        if let raw = defaults.string(forKey: SettingsKey.appearance),
+           let value = AppAppearance(rawValue: raw) {
+            self.appearance = value
+        } else {
+            self.appearance = .auto
+        }
+
+        if let raw = defaults.string(forKey: SettingsKey.accent),
+           let value = AccentChoice(rawValue: raw) {
+            self.accent = value
+        } else {
+            self.accent = .copper
+        }
+
+        self.reduceTransparency = defaults.bool(forKey: SettingsKey.reduceTransparency) // default false
     }
 }
