@@ -33,6 +33,7 @@ targets:
     settings:
       base:
         PRODUCT_NAME: "Copera Currency"
+        PRODUCT_MODULE_NAME: CoperaCurrency
         PRODUCT_BUNDLE_IDENTIFIER: ai.copera.currency
         INFOPLIST_FILE: CoperaCurrency/Resources/Info.plist
         CODE_SIGN_ENTITLEMENTS: CoperaCurrency/Resources/CoperaCurrency.entitlements
@@ -42,12 +43,32 @@ targets:
         COMBINE_HIDPI_IMAGES: "YES"
         ENABLE_PREVIEWS: "YES"
 
+  CoperaCurrencyTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: CoperaCurrencyTests
+    dependencies:
+      - target: CoperaCurrency
+    settings:
+      base:
+        PRODUCT_NAME: CoperaCurrencyTests
+        PRODUCT_BUNDLE_IDENTIFIER: ai.copera.currency.tests
+        GENERATE_INFOPLIST_FILE: "YES"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Copera Currency.app/Contents/MacOS/Copera Currency"
+
 schemes:
   CoperaCurrency:
     build:
       targets:
         CoperaCurrency: all
+        CoperaCurrencyTests: [test]
     run:
       config: Debug
+    test:
+      config: Debug
+      targets:
+        - CoperaCurrencyTests
     archive:
       config: Release
