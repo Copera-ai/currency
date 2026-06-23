@@ -13,7 +13,8 @@ import SwiftUI
 struct PopoverView: View {
     let store: RatesStore
     let settings: AppSettings
-    let onOpenSettings: () -> Void
+    /// Opens Settings at an optional target tab (`nil` = last-viewed tab).
+    let onOpenSettings: (SettingsTab?) -> Void
 
     @Environment(\.theme) private var theme
 
@@ -76,7 +77,7 @@ struct PopoverView: View {
                     Task { await store.refresh() }
                 }
                 CircularIconButton("gearshape", label: "Settings") {
-                    onOpenSettings()
+                    onOpenSettings(nil)
                 }
             }
         }
@@ -166,7 +167,7 @@ struct PopoverView: View {
                     .tracking(0.5)
                     .foregroundStyle(theme.text2)
                 Spacer()
-                Button("Manage") { onOpenSettings() }
+                Button("Manage") { onOpenSettings(.currencies) }
                     .buttonStyle(.plain)
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(Color.accentColor)
@@ -209,7 +210,7 @@ struct PopoverView: View {
 
     private var footer: some View {
         HStack {
-            FooterButton(title: "Settings…") { onOpenSettings() }
+            FooterButton(title: "Settings…") { onOpenSettings(nil) }
             Spacer()
             FooterButton(title: "Quit Copera Currency") { NSApp.terminate(nil) }
         }

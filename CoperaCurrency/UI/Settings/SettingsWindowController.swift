@@ -7,27 +7,40 @@ import SwiftUI
 ///
 /// On `show()` it closes the popover, switches the app to `.regular` (so the
 /// window can become key and appear in the Dock / Cmd-Tab), activates, and shows
-/// a fixed-size window. On window close it reverts to `.accessory` so no stray
-/// Dock icon lingers — proving the policy mechanism that the real Phase-4
-/// settings UI will rely on.
+/// the fixed-size Settings window. On window close it reverts to `.accessory` so
+/// no stray Dock icon lingers.
 ///
-/// Phase 2 hosts placeholder content; Phase 4 swaps in the real settings root.
+/// `show(tab:)` deep-links to a specific section: the popover gear / "Settings…"
+/// open General, while "Manage" opens Currencies. The last-shown tab is
+/// remembered so a plain `show()` returns to where the user left off.
 @MainActor
 final class SettingsWindowController: NSObject, NSWindowDelegate {
     /// Fixed window content size per the design.
     private static let size = NSSize(width: 680, height: 496)
 
+    private let store: RatesStore
+    private let settings: AppSettings
     private let popoverController: PopoverController
-    private var window: NSWindow?
 
-    init(popoverController: PopoverController) {
+    private var window: NSWindow?
+    private var hostingController: NSHostingController<AnyView>?
+    /// Remembered so a plain `show()` reopens the last-viewed section.
+    private var lastTab: SettingsTab = .general
+
+    init(store: RatesStore, settings: AppSettings, popoverController: PopoverController) {
+        self.store = store
+        self.settings = settings
         self.popoverController = popoverController
         super.init()
     }
 
-    /// Show (creating or reusing) the Settings window, taking focus.
-    func show() {
+    /// Show the Settings window, returning to the last-viewed tab.
+    func show() { show(tab: lastTab) }
+
+    /// Show (creating or reusing) the Settings window, deep-linking to `tab`.
+    func show(tab: SettingsTab) {
         popoverController.close()
+        lastTab = tab
 
         // Become a regular app so the window can take focus + show in Cmd-Tab.
         NSApp.setActivationPolicy(.regular)
@@ -35,11 +48,25 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
 
         let window = window ?? makeWindow()
         self.window = window
+
+        // Update the hosted root so a reused window jumps to the requested tab.
+        hostingController?.rootView = rootView(tab: tab)
+
         window.center()
         window.makeKeyAndOrderFront(nil)
     }
 
+    private func rootView(tab: SettingsTab) -> AnyView {
+        AnyView(
+            SettingsRoot(store: store, settings: settings, initialTab: tab)
+                .themedRoot(settings: settings)
+        )
+    }
+
     private func makeWindow() -> NSWindow {
+        let host = NSHostingController(rootView: rootView(tab: lastTab))
+        self.hostingController = host
+
         let window = NSWindow(
             contentRect: NSRect(origin: .zero, size: Self.size),
             styleMask: [.titled, .closable],
@@ -49,12 +76,10 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         window.title = "Settings"
         window.isReleasedWhenClosed = false
         window.delegate = self
-        window.contentViewController = NSHostingController(
-            rootView: SettingsPlaceholderView()
-            // Phase 4 swaps in the real settings root and applies
-            // `.themedRoot(settings:)` here so it honors appearance/accent.
-        )
+        window.contentViewController = host
         window.setContentSize(Self.size)
+        // Fixed-size, non-resizable per the design.
+        window.styleMask.remove(.resizable)
         return window
     }
 
@@ -63,15 +88,5 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
         // Revert to menu-bar-only so no Dock icon remains.
         NSApp.setActivationPolicy(.accessory)
-    }
-}
-
-/// Phase-2 placeholder content for the Settings window.
-private struct SettingsPlaceholderView: View {
-    var body: some View {
-        Text("Settings — coming in Phase 4")
-            .font(.title3)
-            .foregroundStyle(.secondary)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

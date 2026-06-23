@@ -35,15 +35,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Shared popover + settings window. The popover opens Settings via a
         // forward-referenced controller (created just below) to break the cycle
-        // between the two controllers.
-        var openSettings: () -> Void = {}
+        // between the two controllers. The optional tab deep-links a section
+        // ("Manage" → Currencies); `nil` reopens the last-viewed tab.
+        var openSettings: (SettingsTab?) -> Void = { _ in }
         let popoverController = PopoverController(
             store: store,
             settings: settings,
-            onOpenSettings: { openSettings() }
+            onOpenSettings: { tab in openSettings(tab) }
         )
-        let settingsWindowController = SettingsWindowController(popoverController: popoverController)
-        openSettings = { settingsWindowController.show() }
+        let settingsWindowController = SettingsWindowController(
+            store: store,
+            settings: settings,
+            popoverController: popoverController
+        )
+        openSettings = { tab in
+            if let tab { settingsWindowController.show(tab: tab) }
+            else { settingsWindowController.show() }
+        }
 
         // Menu-bar items, driven by the store's tracked pairs.
         let menuBarController = MenuBarController(

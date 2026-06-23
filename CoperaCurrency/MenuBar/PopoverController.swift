@@ -26,15 +26,16 @@ final class PopoverController: NSObject, NSPopoverDelegate {
     private let popover: NSPopover
     private let store: RatesStore
     private let settings: AppSettings
-    /// Opens the Settings window (threaded in from `AppDelegate`, since the
-    /// popover can't reach `SettingsWindowController` directly). Closes the
-    /// popover before opening.
-    private let onOpenSettings: () -> Void
+    /// Opens the Settings window at an optional target tab (threaded in from
+    /// `AppDelegate`, since the popover can't reach `SettingsWindowController`
+    /// directly). A `nil` tab means "the last-viewed tab". Closes the popover
+    /// before opening.
+    private let onOpenSettings: (SettingsTab?) -> Void
 
     /// The button the popover is currently anchored to (for highlight bookkeeping).
     private weak var anchorButton: NSStatusBarButton?
 
-    init(store: RatesStore, settings: AppSettings, onOpenSettings: @escaping () -> Void = {}) {
+    init(store: RatesStore, settings: AppSettings, onOpenSettings: @escaping (SettingsTab?) -> Void = { _ in }) {
         self.store = store
         self.settings = settings
         self.onOpenSettings = onOpenSettings
@@ -53,7 +54,7 @@ final class PopoverController: NSObject, NSPopoverDelegate {
         let root = PopoverView(
             store: store,
             settings: settings,
-            onOpenSettings: { [weak self] in self?.openSettings() }
+            onOpenSettings: { [weak self] tab in self?.openSettings(tab) }
         )
         .themedRoot(settings: settings)
 
@@ -63,10 +64,10 @@ final class PopoverController: NSObject, NSPopoverDelegate {
         return hosting
     }
 
-    /// Close the popover, then open Settings.
-    private func openSettings() {
+    /// Close the popover, then open Settings (optionally at a specific tab).
+    private func openSettings(_ tab: SettingsTab?) {
         close()
-        onOpenSettings()
+        onOpenSettings(tab)
     }
 
     /// Show or hide the popover relative to the given status-item button.
