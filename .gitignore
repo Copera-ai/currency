@@ -41,6 +41,3 @@ fastlane/test_output
 secrets/
 *.pem
 *_private_key*
-
-# Design handoff (extracted locally for reference only)
-design-reference/
