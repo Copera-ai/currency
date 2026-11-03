@@ -48,16 +48,16 @@ struct AboutSettingsView: View {
 
             Section {
                 LabeledContent {
-                    Link("currency-api", destination: Self.currencyAPI)
-                } label: {
-                    Text("Fiat rates")
-                    Text("Fawaz Ahmed's free currency API, updated daily")
-                }
-                LabeledContent {
                     Link("Coinbase", destination: Self.coinbase)
                 } label: {
-                    Text("Crypto prices")
-                    Text("Live spot prices and history from Coinbase")
+                    Text("Live rates")
+                    Text("Real-time fiat exchange rates, crypto prices and crypto history")
+                }
+                LabeledContent {
+                    Link("currency-api", destination: Self.currencyAPI)
+                } label: {
+                    Text("Daily rates")
+                    Text("Fawaz Ahmed's free currency API: fiat history and fallback rates")
                 }
             } header: {
                 Text("Data Sources")

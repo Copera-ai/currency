@@ -6,13 +6,18 @@ import Foundation
 /// - Each source has its own TTL; a source fetched recently is reused, not refetched.
 /// - A failing source backs off exponentially and keeps serving its last good values,
 ///   reported through ``RatesSnapshot/issues``.
-/// - Fiat 24h change is real day-over-day data (latest vs. the previous day's
-///   snapshot); crypto change is Coinbase's 24h change.
+/// - Fiat prices are live Coinbase exchange rates. The daily currency API is the
+///   fallback (and the only source for the few currencies Coinbase lacks) and the
+///   reference for the live change: live rate vs. the latest daily snapshot (00:00 UTC).
+///   Daily-only currencies show the day-over-day change.
+/// - Crypto change is Coinbase's 24h change.
 public actor RatesEngine {
     /// Tuning knobs.
     public struct Configuration: Sendable {
-        /// Reuse fiat data younger than this (the source publishes daily).
+        /// Reuse daily fiat data younger than this (the source publishes daily).
         public var fiatTTL: TimeInterval
+        /// Reuse live fiat rates younger than this.
+        public var liveFiatTTL: TimeInterval
         /// Reuse crypto data younger than this.
         public var cryptoTTL: TimeInterval
         /// First retry delay after a failure; doubles on each consecutive failure.
@@ -20,8 +25,16 @@ public actor RatesEngine {
         /// Upper bound for the retry delay.
         public var backoffMax: TimeInterval
 
-        public init(fiatTTL: TimeInterval = 600, cryptoTTL: TimeInterval = 20, backoffBase: TimeInterval = 30, backoffMax: TimeInterval = 900) {
+        /// Live TTLs sit below the shortest refresh interval (15 s) so every tick refetches.
+        public init(
+            fiatTTL: TimeInterval = 600,
+            liveFiatTTL: TimeInterval = 10,
+            cryptoTTL: TimeInterval = 10,
+            backoffBase: TimeInterval = 30,
+            backoffMax: TimeInterval = 900
+        ) {
             self.fiatTTL = fiatTTL
+            self.liveFiatTTL = liveFiatTTL
             self.cryptoTTL = cryptoTTL
             self.backoffBase = backoffBase
             self.backoffMax = backoffMax
@@ -38,12 +51,16 @@ public actor RatesEngine {
     private let fiat: FiatRatesService
     private let coinbase: CoinbaseService
     private let productIDs: [String]
+    private let fiatCodes: Set<String>
     private let cache: DiskCache
     private let configuration: Configuration
     private let now: @Sendable () -> Date
 
     private var fiatLatest: FiatSnapshot?
     private var fiatPrevious: FiatSnapshot?
+    /// Live fiat rates as units per USD (catalog fiat only).
+    private var liveFiat: [String: Double] = [:]
+    private var liveFiatFetchedAt: Date?
     private var tickers: [String: CoinbaseTicker] = [:]
     private var cryptoFetchedAt: Date?
     private var restored: RatesSnapshot?
@@ -63,6 +80,7 @@ public actor RatesEngine {
         fiat = FiatRatesService(http: http, cache: cache, now: now)
         coinbase = CoinbaseService(http: http)
         productIDs = catalog.coinbaseProductIDs
+        fiatCodes = Set(catalog.fiat.map { $0.code.uppercased() })
         self.cache = cache
         self.configuration = configuration
         self.now = now
@@ -114,14 +132,17 @@ public actor RatesEngine {
     private func performRefresh(force: Bool) async throws -> RatesSnapshot {
         let started = now()
         let wantFiat = isDue(.fiat, ttl: configuration.fiatTTL, force: force, at: started)
+        let wantLiveFiat = isDue(.liveFiat, ttl: configuration.liveFiatTTL, force: force, at: started)
         let wantCrypto = isDue(.crypto, ttl: configuration.cryptoTTL, force: force, at: started)
-        Log.engine.info("Refresh (force: \(force)) fiat: \(wantFiat), crypto: \(wantCrypto)")
+        Log.engine.info("Refresh (force: \(force)) fiat: \(wantFiat), live fiat: \(wantLiveFiat), crypto: \(wantCrypto)")
 
         let fiatService = fiat
         let previousCached = fiatPrevious
         let coinbaseService = coinbase
         let ids = productIDs
+        let codes = fiatCodes
         async let fiatResult = wantFiat ? Self.loadFiat(fiatService, previousCached: previousCached) : nil
+        async let liveFiatResult = wantLiveFiat ? Self.loadLiveFiat(coinbaseService, codes: codes) : nil
         async let cryptoResult = wantCrypto ? Self.loadCrypto(coinbaseService, productIDs: ids) : nil
 
         let completed = now()
@@ -133,6 +154,16 @@ public actor RatesEngine {
                 recordSuccess(.fiat, at: completed)
             case .failure(let error):
                 recordFailure(.fiat, error, at: completed)
+            }
+        }
+        if let result = await liveFiatResult {
+            switch result {
+            case .success(let fresh):
+                liveFiat = fresh
+                liveFiatFetchedAt = completed
+                recordSuccess(.liveFiat, at: completed)
+            case .failure(let error):
+                recordFailure(.liveFiat, error, at: completed)
             }
         }
         if let result = await cryptoResult {
@@ -151,7 +182,9 @@ public actor RatesEngine {
             throw snapshot.issues[.fiat] ?? snapshot.issues[.crypto] ?? CurrencyKitError.noData
         }
         current = snapshot
-        if (wantFiat && health[.fiat]?.lastError == nil) || (wantCrypto && health[.crypto]?.lastError == nil) {
+        let fetchedSomething = [(wantFiat, RateSourceKind.fiat), (wantLiveFiat, .liveFiat), (wantCrypto, .crypto)]
+            .contains { wanted, kind in wanted && health[kind]?.lastError == nil }
+        if fetchedSomething {
             cache.saveLastRates(snapshot)
         }
         return snapshot
@@ -178,6 +211,16 @@ public actor RatesEngine {
         }
     }
 
+    private static func loadLiveFiat(_ service: CoinbaseService, codes: Set<String>) async -> Result<[String: Double], CurrencyKitError> {
+        do {
+            let rates = try await service.exchangeRates().filter { codes.contains($0.key) && $0.key != "USD" }
+            guard !rates.isEmpty else { return .failure(.noData) }
+            return .success(rates)
+        } catch {
+            return .failure(CurrencyKitError(error))
+        }
+    }
+
     private static func loadCrypto(_ service: CoinbaseService, productIDs: [String]) async -> Result<[String: CoinbaseTicker], CurrencyKitError> {
         do {
             return .success(try await service.tickers(productIDs))
@@ -193,9 +236,20 @@ public actor RatesEngine {
         if let latest = fiatLatest {
             let asOf = latest.day.date
             for (code, units) in latest.unitsPerUSD {
+                // Never replace a newer live value restored from disk with the daily one.
+                if let existing = rates[code], existing.asOf > asOf { continue }
                 let usdPerUnit = 1 / units
                 let change = fiatPrevious?.usdPerUnit(code).flatMap { RateMath.change(from: $0, to: usdPerUnit) }
                 rates[code] = AssetRate(usdPerUnit: usdPerUnit, change24h: change, asOf: asOf, source: .currencyAPI)
+            }
+        }
+        if let fetchedAt = liveFiatFetchedAt {
+            for (code, units) in liveFiat {
+                let usdPerUnit = 1 / units
+                // Change since the latest daily snapshot (00:00 UTC); unknown without one.
+                let reference = fiatLatest?.usdPerUnit(code)
+                let change = reference.flatMap { RateMath.change(from: $0, to: usdPerUnit) }
+                rates[code] = AssetRate(usdPerUnit: usdPerUnit, change24h: change, asOf: fetchedAt, source: .coinbase)
             }
         }
         if let fetchedAt = cryptoFetchedAt {

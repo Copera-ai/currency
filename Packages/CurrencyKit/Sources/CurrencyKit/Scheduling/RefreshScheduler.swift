@@ -7,18 +7,20 @@ public enum RefreshTrigger: String, Hashable, Sendable, CaseIterable {
     case wake
     case networkRestored
     case manual
+    /// The popover opened: catch up if the data is older than the engine's TTLs.
+    case popoverOpened
 
     /// Whether this trigger should bypass TTLs and backoff.
     public var forcesRefresh: Bool {
         switch self {
         case .manual, .wake, .networkRestored: true
-        case .launch, .timer: false
+        case .launch, .timer, .popoverOpened: false
         }
     }
 
     /// Whether this trigger skips the debounce window.
     var firesImmediately: Bool {
-        self == .manual || self == .launch
+        self == .manual || self == .launch || self == .popoverOpened
     }
 }
 

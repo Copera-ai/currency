@@ -92,6 +92,8 @@ struct SchedulerTests {
         #expect(RefreshTrigger.networkRestored.forcesRefresh)
         #expect(!RefreshTrigger.timer.forcesRefresh)
         #expect(!RefreshTrigger.launch.forcesRefresh)
+        #expect(!RefreshTrigger.popoverOpened.forcesRefresh)
+        #expect(RefreshTrigger.popoverOpened.firesImmediately)
     }
 
     // MARK: - Reachability

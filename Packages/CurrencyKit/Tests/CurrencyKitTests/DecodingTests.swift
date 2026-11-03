@@ -25,6 +25,18 @@ struct DecodingTests {
         #expect(jsdelivr.unitsPerUSD.count > 300)
     }
 
+    @Test func coinbaseExchangeRates() throws {
+        let rates = try CoinbaseExchangeRates.decode(try Fixture.data("coinbase-exchange-rates"))
+        #expect(rates["BRL"] == 5.499)
+        #expect(rates["EUR"] == 0.893466)
+        #expect(rates["BOGUS"] == nil && rates["ZERO"] == nil, "invalid entries are skipped")
+
+        let euroBase = Data(#"{"data":{"currency":"EUR","rates":{"BRL":"6.1"}}}"#.utf8)
+        #expect(throws: CurrencyKitError.self) { try CoinbaseExchangeRates.decode(euroBase) }
+        let empty = Data(#"{"data":{"currency":"USD","rates":{}}}"#.utf8)
+        #expect(throws: CurrencyKitError.self) { try CoinbaseExchangeRates.decode(empty) }
+    }
+
     @Test func fiatSkipsInvalidEntriesWithoutFailing() throws {
         let json = #"{"date":"2026-11-03","usd":{"brl":5.4,"bad":"x","nil":null,"zero":0,"neg":-1}}"#
         let snapshot = try FiatSnapshot.decode(Data(json.utf8))

@@ -32,7 +32,40 @@ struct HistoryTests {
         #expect(history.sources == [.currencyAPI])
         #expect(approx(history.change, 5.03 / 5.27 - 1))
         #expect(approx(history.low, 5.01) && approx(history.high, 5.31))
-        #expect(http.requests.allSatisfy { $0.url?.host()?.hasSuffix("currency-api.pages.dev") == true })
+        #expect(http.requests.allSatisfy { request in
+            let url = request.url?.absoluteString ?? ""
+            return url.contains("currency-api.pages.dev") || url.contains(FakeHTTPClient.exchangeRatesPattern)
+        })
+    }
+
+    @Test func fiatSeriesEndsWithTheLiveRate() async throws {
+        let sandbox = try Sandbox()
+        let http = FakeHTTPClient()
+        dailyRoutes(http)
+        http.route(FakeHTTPClient.exchangeRatesPattern, .json(try Fixture.data("coinbase-exchange-rates")))
+        let history = try await makeService(http, sandbox).history(for: CurrencyPair(base: "USD", quote: "BRL"), range: .week)
+
+        #expect(history.points.count == 9, "8 daily points + now")
+        // Today's 00:00 UTC point is still the daily snapshot; the live rate is appended at "now".
+        #expect(approx(history.points.dropLast().last?.value, 5.03))
+        #expect(history.points.last?.date == fixtureNow)
+        #expect(approx(history.points.last?.value, liveUSDBRL))
+        #expect(history.sources == [.coinbase, .currencyAPI])
+    }
+
+    @Test func mixedPairUsesLiveFiatForTodaysCandles() async throws {
+        let sandbox = try Sandbox()
+        let http = FakeHTTPClient()
+        dailyRoutes(http)
+        http.route(FakeHTTPClient.exchangeRatesPattern, .json(try Fixture.data("coinbase-exchange-rates")))
+        let yesterday = fixtureNow.addingTimeInterval(-18 * 3600)
+        let today = fixtureNow.addingTimeInterval(-3600)
+        http.route("BTC-USD/candles", .json(Fixture.candles([(yesterday, 100_000), (today, 100_000)])))
+        let history = try await makeService(http, sandbox).history(for: CurrencyPair(base: "BTC", quote: "BRL"), range: .day)
+
+        #expect(history.points.count == 2)
+        #expect(approx(history.points.first?.value, 100_000 * 5.02), "yesterday uses the 2026-11-02 snapshot")
+        #expect(approx(history.points.last?.value, 100_000 * liveUSDBRL), "today uses the live rate")
     }
 
     @Test func crossFiatPairAndCaching() async throws {
@@ -54,7 +87,7 @@ struct HistoryTests {
         let relaunch = FakeHTTPClient()
         dailyRoutes(relaunch, missing: ["2026-10-30"])
         _ = try await makeService(relaunch, sandbox).history(for: pair, range: .week)
-        #expect(relaunch.requests.count == 3, "today + the missing day on both hosts")
+        #expect(relaunch.requests.count == 4, "today + the missing day on both hosts + live rates")
     }
 
     @Test func quarterSamplesEveryThirdDay() async throws {

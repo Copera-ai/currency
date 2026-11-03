@@ -95,6 +95,40 @@ struct CoinbaseTicker: Hashable, Sendable {
     }
 }
 
+/// Coinbase's live exchange rates (`/v2/exchange-rates?currency=USD`).
+enum CoinbaseExchangeRates {
+    /// Decodes `{"data":{"currency":"USD","rates":{"BRL":"5.499",…}}}` into uppercase
+    /// code → units per USD. Entries that are not positive numbers are skipped.
+    static func decode(_ data: Data) throws -> [String: Double] {
+        let payload: Payload
+        do {
+            payload = try JSONDecoder().decode(Payload.self, from: data)
+        } catch {
+            throw CurrencyKitError.decoding("Coinbase exchange rates: \(error)")
+        }
+        guard payload.data.currency.uppercased() == "USD" else {
+            throw CurrencyKitError.decoding("Coinbase exchange rates: expected USD base, got \(payload.data.currency)")
+        }
+        var rates: [String: Double] = [:]
+        for (code, raw) in payload.data.rates {
+            if let value = raw.value.flatMap(Double.init), value > 0, value.isFinite {
+                rates[code.uppercased()] = value
+            }
+        }
+        guard !rates.isEmpty else { throw CurrencyKitError.decoding("Coinbase exchange rates: empty rates map") }
+        return rates
+    }
+
+    private struct Payload: Decodable {
+        let data: Body
+
+        struct Body: Decodable {
+            let currency: String
+            let rates: [String: Lossy<String>]
+        }
+    }
+}
+
 /// One OHLC candle from the Coinbase Exchange API.
 struct Candle: Hashable, Sendable {
     let time: Date

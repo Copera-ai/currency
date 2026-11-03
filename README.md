@@ -32,12 +32,12 @@ macOS 26 (Tahoe) or later on an Apple Silicon Mac (M1 or newer).
 
 - **One menu bar item per pair.** Show `USD/BRL 5.44 ▲`, a symbol (`R$ 5.44`), a flag or just the value, with an optional up/down arrow. ⌘-drag items to reorder them.
 - **Converter.** Type an amount (simple math such as `250*4` or `(12+8)/2` works), pick currencies from a searchable list, swap with one click and copy the result with ⌘C.
-- **Real 24h change.** Crypto uses Coinbase's 24-hour move, and fiat compares today's rates with yesterday's.
+- **Real-time rates and change.** Fiat and crypto prices are live from Coinbase. Crypto shows Coinbase's 24-hour move; fiat shows the move since today's 00:00 UTC reference.
 - **Sparklines and charts.** Every pair has a 24h sparkline. Expand a pair for a full chart with 24H, 7D, 30D and 90D ranges.
 - **170+ currencies.** 150+ fiat currencies with flags, plus BTC, ETH, SOL, XRP, DOGE and other major crypto assets. Any pair works, including crypto to fiat (`BTC/BRL`).
 - **Your pairs, your order.** Favorite pairs, drag to reorder, and choose which ones appear in the menu bar. Right-click a pair to copy its rate or load it into the converter.
 - **Native Liquid Glass design.** Light, Dark or System appearance, six accent colors and a Reduce transparency option.
-- **Stays current.** Refreshes every 1 to 60 minutes, right after your Mac wakes and when the network comes back. The last rates stay visible offline, marked as stale.
+- **Stays current.** Refreshes every 15 seconds to 1 hour (30 seconds by default), when you open the popover, right after your Mac wakes and when the network comes back. The last rates stay visible offline, marked as stale.
 - **Fits in.** Open at login, a global shortcut for the converter, and full keyboard navigation.
 
 <table>
@@ -85,13 +85,13 @@ macOS 26 (Tahoe) or later on an Apple Silicon Mac (M1 or newer).
 
 | Data | Source |
 | --- | --- |
-| Fiat rates, day-over-day change and history | [Fawaz Ahmed's currency-api](https://github.com/fawazahmed0/exchange-api) (daily snapshots, via Cloudflare Pages with a jsDelivr fallback) |
-| Crypto prices, 24h change and chart candles | [Coinbase](https://www.coinbase.com) public market data |
+| Live fiat rates, crypto prices, 24h crypto change and chart candles | [Coinbase](https://www.coinbase.com) public exchange-rate and market data |
+| Fiat history, the daily reference for the fiat change, and fallback rates | [Fawaz Ahmed's currency-api](https://github.com/fawazahmed0/exchange-api) (daily snapshots, via Cloudflare Pages with a jsDelivr fallback) |
 
 - **No accounts and no API keys.** Both sources are free and public.
 - **No tracking or analytics.** The app only contacts the two rate sources above and, for updates, this repository's GitHub Releases.
 - Your pairs and settings are stored locally in `~/Library/Application Support/ai.copera.currency`.
-- Fiat sources publish once a day. Rates are for information only, not for trading.
+- Rates refresh every 15 seconds to 1 hour (30 seconds by default). Fiat change is measured against the 00:00 UTC daily reference. Rates are for information only, not for trading.
 
 ## Build from source
 
@@ -153,7 +153,7 @@ See [`scripts/release.sh`](scripts/release.sh) and [`scripts/publish.sh`](script
 
 ## Acknowledgements
 
-- [currency-api](https://github.com/fawazahmed0/exchange-api) by Fawaz Ahmed for free daily fiat rates.
+- [currency-api](https://github.com/fawazahmed0/exchange-api) by Fawaz Ahmed for free daily fiat history.
 - [Coinbase](https://www.coinbase.com) for public crypto market data.
 - [Sparkle](https://sparkle-project.org) for updates.
 - [KeyboardShortcuts](https://github.com/sindresorhus/KeyboardShortcuts) by Sindre Sorhus.

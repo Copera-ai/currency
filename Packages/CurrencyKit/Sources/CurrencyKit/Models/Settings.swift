@@ -2,6 +2,8 @@ import Foundation
 
 /// How often rates refresh automatically.
 public enum RefreshInterval: Int, Codable, CaseIterable, Sendable, Identifiable {
+    case fifteenSeconds = 15
+    case thirtySeconds = 30
     case oneMinute = 60
     case fiveMinutes = 300
     case fifteenMinutes = 900
@@ -14,6 +16,8 @@ public enum RefreshInterval: Int, Codable, CaseIterable, Sendable, Identifiable 
 
     public var displayName: String {
         switch self {
+        case .fifteenSeconds: "15 seconds"
+        case .thirtySeconds: "30 seconds"
         case .oneMinute: "1 minute"
         case .fiveMinutes: "5 minutes"
         case .fifteenMinutes: "15 minutes"
@@ -134,7 +138,7 @@ public enum AccentChoice: String, Codable, CaseIterable, Sendable, Identifiable 
 /// User preferences. Decoding tolerates missing keys so new settings can be added
 /// without a schema bump.
 public struct UserSettings: Codable, Hashable, Sendable {
-    public var refreshInterval: RefreshInterval = .fiveMinutes
+    public var refreshInterval: RefreshInterval = .thirtySeconds
     public var menuBarLabelFormat: MenuBarLabelFormat = .pair
     public var showChangeArrow: Bool = true
     public var decimals: DecimalsPreference = .automatic

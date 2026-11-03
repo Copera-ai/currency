@@ -30,10 +30,10 @@ struct CurrencyStoreTests {
         #expect(store.lastUpdated == fixtureNow)
         #expect(store.lastError == nil)
         #expect(!store.isRefreshing)
-        #expect(store.quote(for: usdBRL)?.price == 5.44059239)
+        #expect(approx(store.quote(for: usdBRL)?.price, liveUSDBRL))
         #expect(store.quote(for: btcUSD)?.price == 76372.94)
         #expect(Set(store.quotes.keys) == Set(TrackedPair.defaults.map(\.id)))
-        #expect(approx(store.converterResult, 100 * 5.44059239))
+        #expect(approx(store.converterResult, 100 * liveUSDBRL))
         #expect(store.updatedText(relativeTo: fixtureNow) == "Updated just now")
     }
 
@@ -77,7 +77,7 @@ struct CurrencyStoreTests {
         http.route("", .failure(.notConnectedToInternet))
         await store.refresh()
         #expect(store.loadState == .offline)
-        #expect(store.quote(for: usdBRL)?.price == 5.44059239)
+        #expect(approx(store.quote(for: usdBRL)?.price, liveUSDBRL))
         #expect(store.lastUpdated == fixtureNow)
     }
 
@@ -150,8 +150,8 @@ struct CurrencyStoreTests {
         #expect(store.converter.amount == 1_250)
         store.swapConverterCurrencies()
         #expect(store.converter == ConverterState(from: "BRL", to: "USD", amount: 1_250))
-        #expect(approx(store.converterResult, 1_250 / 5.44059239))
-        #expect(approx(store.convert(1, from: "BTC", to: "BRL"), 76372.94 * 5.44059239))
+        #expect(approx(store.converterResult, 1_250 / liveUSDBRL))
+        #expect(approx(store.convert(1, from: "BTC", to: "BRL"), 76372.94 * liveUSDBRL))
 
         // Converter edits are coalesced: nothing is written until the delay or stop().
         #expect(makeStore(FakeHTTPClient(), sandbox).converter != store.converter)
@@ -194,13 +194,13 @@ struct CurrencyStoreTests {
         let store = makeStore(try FakeHTTPClient.withFixtures(), sandbox)
         await store.refresh()
 
-        #expect(store.menuBarLabel(for: usdBRL).text == "USD/BRL 5.44 ▲")
+        #expect(store.menuBarLabel(for: usdBRL).text == "USD/BRL 5.50 ▲")
         #expect(store.menuBarLabel(for: btcUSD).text == "BTC/USD 76,372.94 ▼")
         store.settings.menuBarLabelFormat = .symbol
-        #expect(store.menuBarLabel(for: usdBRL).text == "R$ 5.44 ▲")
+        #expect(store.menuBarLabel(for: usdBRL).text == "R$ 5.50 ▲")
         store.settings.menuBarLabelFormat = .flag
         store.settings.showChangeArrow = false
-        #expect(store.menuBarLabel(for: usdBRL).text == "🇺🇸 5.44")
+        #expect(store.menuBarLabel(for: usdBRL).text == "🇺🇸 5.50")
         #expect(store.menuBarLabel(for: btcUSD).text == "₿ 76,372.94")
         store.settings.menuBarLabelFormat = .value
         #expect(store.menuBarLabel(for: CurrencyPair(base: "USD", quote: "XYZ")).text == "—")

@@ -16,7 +16,7 @@ struct RatesEngineTests {
         RatesEngine(http: http, cache: sandbox.cache, now: { clock.now })
     }
 
-    @Test func mergesRealDayOverDayFiatChangeAndCoinbaseCrypto() async throws {
+    @Test func mergesLiveFiatDailyFallbackAndCoinbaseCrypto() async throws {
         let sandbox = try Sandbox()
         let http = try FakeHTTPClient.withFixtures()
         let snapshot = try await makeEngine(http, sandbox).refresh()
@@ -25,11 +25,21 @@ struct RatesEngineTests {
         #expect(snapshot.fiatDay?.description == "2026-11-03")
         #expect(snapshot.rates["USD"]?.usdPerUnit == 1)
 
-        // USD/BRL: 5.44059239 today vs 5.43870352 yesterday.
+        // USD/BRL is live (5.499); its change is measured against today's 00:00 UTC
+        // daily snapshot (5.44059239).
         let usdBRL = try #require(snapshot.quote(for: CurrencyPair(base: "USD", quote: "BRL")))
-        #expect(usdBRL.price == 5.44059239)
-        #expect(approx(usdBRL.change24h, 5.44059239 / 5.43870352 - 1))
-        #expect(usdBRL.asOf == CalendarDay(year: 2026, month: 11, day: 3).date)
+        #expect(approx(usdBRL.price, liveUSDBRL))
+        #expect(approx(usdBRL.change24h, liveUSDBRL / 5.44059239 - 1))
+        #expect(usdBRL.asOf == fixtureNow)
+        #expect(usdBRL.sources == [.coinbase])
+
+        // Fiat missing from the live feed falls back to the daily API with its
+        // day-over-day change (CHF: 0.81806472 today vs 0.82318814 yesterday).
+        let chf = try #require(snapshot.rates["CHF"])
+        #expect(chf.source == .currencyAPI)
+        #expect(chf.usdPerUnit == 1 / 0.81806472)
+        #expect(approx(chf.change24h, (1 / 0.81806472) / (1 / 0.82318814) - 1))
+        #expect(chf.asOf == CalendarDay(year: 2026, month: 11, day: 3).date)
 
         // BTC comes from Coinbase with its own 24h change.
         let btc = try #require(snapshot.rates["BTC"])
@@ -62,6 +72,7 @@ struct RatesEngineTests {
         #expect(http.requestCount(FakeHTTPClient.latestPattern) == 1)
         #expect(http.requestCount(FakeHTTPClient.previousDayPattern) == 1)
         #expect(http.requestCount(FakeHTTPClient.productsPattern) == 1)
+        #expect(http.requestCount(FakeHTTPClient.exchangeRatesPattern) == 1)
     }
 
     @Test func perSourceTTLs() async throws {
@@ -71,13 +82,14 @@ struct RatesEngineTests {
         let engine = makeEngine(http, sandbox, clock: clock)
 
         _ = try await engine.refresh()
-        clock.advance(10)
+        clock.advance(5)
         _ = try await engine.refresh()
-        #expect(http.requests.count == 3, "both sources fresh")
+        #expect(http.requests.count == 4, "all sources fresh")
 
-        clock.advance(30) // past the 20s crypto TTL, inside the 10 min fiat TTL
+        clock.advance(10) // past the 10s live TTLs, inside the 10 min daily TTL
         _ = try await engine.refresh()
         #expect(http.requestCount(FakeHTTPClient.productsPattern) == 2)
+        #expect(http.requestCount(FakeHTTPClient.exchangeRatesPattern) == 2)
         #expect(http.requestCount(FakeHTTPClient.latestPattern) == 1)
 
         _ = try await engine.refresh(force: true)
@@ -125,14 +137,51 @@ struct RatesEngineTests {
         #expect(RatesEngine.backoffDelay(failures: 0, configuration: configuration) == 0)
     }
 
-    @Test func missingPreviousDayLeavesFiatChangeUnknown() async throws {
+    @Test func missingPreviousDayLeavesDailyOnlyChangeUnknown() async throws {
         let sandbox = try Sandbox()
         let http = try FakeHTTPClient.withFixtures()
         http.route("2026-11-02", .status(404))
         let snapshot = try await makeEngine(http, sandbox).refresh()
         #expect(snapshot.isComplete)
-        #expect(snapshot.rates["BRL"]?.change24h == nil)
-        #expect(snapshot.quote(for: CurrencyPair(base: "USD", quote: "BRL"))?.change24h == nil)
+        #expect(snapshot.rates["CHF"]?.change24h == nil)
+        #expect(snapshot.quote(for: CurrencyPair(base: "USD", quote: "CHF"))?.change24h == nil)
+        #expect(snapshot.rates["BRL"]?.change24h != nil, "live change only needs today's snapshot")
+    }
+
+    @Test func liveFiatFailureFallsBackToDailyRates() async throws {
+        let sandbox = try Sandbox()
+        let http = try FakeHTTPClient.withFixtures()
+        http.route(FakeHTTPClient.exchangeRatesPattern, .status(503))
+        let snapshot = try await makeEngine(http, sandbox).refresh()
+
+        #expect(snapshot.issues == [.liveFiat: .httpStatus(503)])
+        let usdBRL = try #require(snapshot.quote(for: CurrencyPair(base: "USD", quote: "BRL")))
+        #expect(usdBRL.price == 5.44059239)
+        #expect(approx(usdBRL.change24h, 5.44059239 / 5.43870352 - 1))
+        #expect(usdBRL.sources == [.currencyAPI])
+    }
+
+    @Test func liveFeedOnlyOverridesFiat() async throws {
+        let sandbox = try Sandbox()
+        let snapshot = try await makeEngine(try FakeHTTPClient.withFixtures(), sandbox).refresh()
+        // The live feed also lists BTC and USDC; crypto keeps its own sources.
+        #expect(snapshot.rates["BTC"]?.usdPerUnit == 76372.94)
+        #expect(snapshot.rates["USDC"]?.source == .currencyAPI)
+        #expect(snapshot.rates["EUR"]?.source == .coinbase)
+    }
+
+    @Test func restoredLiveRatesBeatOlderDailyRates() async throws {
+        let sandbox = try Sandbox()
+        _ = try await makeEngine(try FakeHTTPClient.withFixtures(), sandbox).refresh()
+
+        let http = try FakeHTTPClient.withFixtures()
+        http.route(FakeHTTPClient.exchangeRatesPattern, .failure(.timedOut))
+        let engine = makeEngine(http, sandbox)
+        _ = await engine.restoreFromDisk()
+        let snapshot = try await engine.refresh(force: true)
+        #expect(snapshot.issues[.liveFiat] != nil)
+        #expect(snapshot.rates["BRL"]?.source == .coinbase, "the 12:00 live value is newer than the 00:00 daily one")
+        #expect(approx(snapshot.quote(for: CurrencyPair(base: "USD", quote: "BRL"))?.price, liveUSDBRL))
     }
 
     @Test func totalFailureWithoutDataThrows() async throws {
@@ -151,7 +200,7 @@ struct RatesEngineTests {
         let engine = makeEngine(offline, sandbox)
         let restored = try #require(await engine.restoreFromDisk())
         let snapshot = try await engine.refresh(force: true)
-        #expect(snapshot.issues == [.fiat: .offline, .crypto: .offline])
+        #expect(snapshot.issues == [.fiat: .offline, .liveFiat: .offline, .crypto: .offline])
         #expect(snapshot.rates["BRL"]?.usdPerUnit == restored.rates["BRL"]?.usdPerUnit)
         #expect(snapshot.fetchedAt == restored.fetchedAt, "fetchedAt reflects the last real fetch")
     }

@@ -3,6 +3,12 @@
 All notable changes to Copera Currency. Each `## <version>` section is used as the
 GitHub Release notes and the in-app (Sparkle) update notes.
 
+## 1.0.1
+
+- **Real-time fiat rates**: fiat currencies now use Coinbase's live exchange rates instead of a once-a-day snapshot, so USD/BRL and friends match what your bank and Google show. The daily source remains as a fallback.
+- **Faster refresh**: new 15- and 30-second intervals (30 seconds is the new default), and opening the popover catches up immediately.
+- **Charts end live**: fiat charts now finish at the current rate instead of this morning's snapshot.
+
 ## 1.0.0
 
 - **Native Liquid Glass design** for macOS 26: a rebuilt popover and Settings window, Light/Dark/System appearance and six accent colors.

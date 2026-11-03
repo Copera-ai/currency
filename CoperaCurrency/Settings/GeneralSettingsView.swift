@@ -36,7 +36,7 @@ struct GeneralSettingsView: View {
             } header: {
                 Text("Rates")
             } footer: {
-                Text("Crypto prices are live from Coinbase; fiat rates update once a day.")
+                Text("Fiat and crypto rates are live from Coinbase.")
                     .foregroundStyle(.secondary)
             }
 

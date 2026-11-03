@@ -53,6 +53,9 @@ enum Fixture {
     }
 }
 
+/// USD/BRL in the live exchange-rates fixture (the daily fixture has 5.44059239).
+let liveUSDBRL = 5.499
+
 /// 2026-11-03T12:00:00Z — the day the fixtures were captured.
 let fixtureNow = Date(timeIntervalSince1970: 1_793_707_200)
 
@@ -126,14 +129,17 @@ extension FakeHTTPClient {
     static let jsdelivrLatestPattern = "currency-api@latest"
     static let previousDayPattern = "2026-11-02.currency-api.pages.dev"
     static let productsPattern = "api.coinbase.com/api/v3/brokerage/market/products"
+    static let exchangeRatesPattern = "api.coinbase.com/v2/exchange-rates"
 
-    /// Routes serving the captured fixtures for latest, previous day and Coinbase products.
+    /// Routes serving the captured fixtures for latest, previous day, Coinbase products
+    /// and Coinbase live exchange rates.
     static func withFixtures(latency: Duration = .zero) throws -> FakeHTTPClient {
         let client = FakeHTTPClient(latency: latency)
         client.route(latestPattern, .json(try Fixture.data("fiat-latest")))
         client.route(jsdelivrLatestPattern, .json(try Fixture.data("fiat-latest-jsdelivr")))
         client.route(previousDayPattern, .json(try Fixture.data("fiat-2026-11-02")))
         client.route(productsPattern, .json(try Fixture.data("coinbase-products")))
+        client.route(exchangeRatesPattern, .json(try Fixture.data("coinbase-exchange-rates")))
         return client
     }
 }

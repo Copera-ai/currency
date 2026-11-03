@@ -7,11 +7,19 @@ import Foundation
 ///   sampled daily for 7D/30D and every third day for 90D. 24H is unavailable for pairs
 ///   without a live leg.
 /// - Mixed pairs use the candle timeline and the most recent daily value at each time.
+/// - Fiat legs use Coinbase's live exchange rate after today's 00:00 UTC snapshot, and
+///   fiat-only series end with a live point at "now", so charts end at the price shown.
 public actor HistoryService {
     private enum Leg: Hashable {
         case usd
         case coinbase(String)
         case daily(String)
+    }
+
+    /// Live fiat rates (units per USD) and the moment they take over from daily data.
+    private struct LiveFiat {
+        let unitsPerUSD: [String: Double]
+        let since: Date
     }
 
     private struct Key: Hashable {
@@ -43,7 +51,7 @@ public actor HistoryService {
 
     /// The series for `pair` over `range`, oldest point first.
     ///
-    /// Results are memoized briefly (2 min with a live leg, 30 min otherwise) and
+    /// Results are memoized briefly (1 min, since every series ends live) and
     /// concurrent identical requests share one fetch.
     /// - Throws: ``CurrencyKitError/historyUnavailable`` for 24H on pairs without a
     ///   Coinbase leg; other ``CurrencyKitError``s when nothing could be fetched.
@@ -56,8 +64,7 @@ public actor HistoryService {
         inFlight[key] = task
         defer { inFlight[key] = nil }
         let history = try await task.value
-        let ttl: TimeInterval = catalog.hasLiveLeg(pair) ? 120 : 1_800
-        memo[key] = (history, now().addingTimeInterval(ttl))
+        memo[key] = (history, now().addingTimeInterval(60))
         return history
     }
 
@@ -81,20 +88,22 @@ public actor HistoryService {
         let end = now()
         let start = end.addingTimeInterval(-range.duration)
         async let candleSeries = Self.loadCandles(coinbase, products: products, range: range, start: start, end: end)
+        async let liveRates = needsDaily ? Self.loadLiveFiat(coinbase) : nil
         let daily = needsDaily ? try await dailySamples(for: range, endingAt: end) : []
         let series = try await candleSeries
+        let live = await liveRates.map { LiveFiat(unitsPerUSD: $0, since: CalendarDay(end).date) }
 
         let times: [Date]
         if products.isEmpty {
-            times = daily.map(\.day.date)
+            times = daily.map(\.day.date) + (live == nil ? [] : [end])
         } else {
             let sets = products.compactMap { series[$0].map { Set($0.keys) } }
             times = (sets.dropFirst().reduce(sets.first ?? []) { $0.intersection($1) }).sorted()
         }
 
         let points = times.compactMap { time -> HistoryPoint? in
-            guard let base = value(of: legs[0], at: time, series: series, daily: daily),
-                  let quote = value(of: legs[1], at: time, series: series, daily: daily),
+            guard let base = value(of: legs[0], at: time, series: series, daily: daily, live: live),
+                  let quote = value(of: legs[1], at: time, series: series, daily: daily, live: live),
                   let price = RateMath.crossRate(baseUSDPerUnit: base, quoteUSDPerUnit: quote) else {
                 return nil
             }
@@ -105,6 +114,7 @@ public actor HistoryService {
         var sources: [RateSource] = []
         if !products.isEmpty { sources.append(.coinbase) }
         if needsDaily { sources.append(.currencyAPI) }
+        if live != nil, !sources.contains(.coinbase) { sources.append(.coinbase) }
         if sources.isEmpty { sources.append(.currencyAPI) }
         return PairHistory(pair: pair, range: range, points: points, sources: sources.sorted { $0.rawValue < $1.rawValue })
     }
@@ -113,7 +123,8 @@ public actor HistoryService {
         of leg: Leg,
         at time: Date,
         series: [String: [Date: Double]],
-        daily: [(day: CalendarDay, snapshot: FiatSnapshot)]
+        daily: [(day: CalendarDay, snapshot: FiatSnapshot)],
+        live: LiveFiat?
     ) -> Double? {
         switch leg {
         case .usd:
@@ -121,10 +132,24 @@ public actor HistoryService {
         case .coinbase(let product):
             return series[product]?[time]
         case .daily(let code):
+            if let live, time > live.since, let units = live.unitsPerUSD[code], units > 0 {
+                return 1 / units
+            }
             // The most recent sample on or before `time`, else the earliest one.
             let day = CalendarDay(time)
             let sample = daily.last { $0.day <= day } ?? daily.first
             return sample?.snapshot.usdPerUnit(code)
+        }
+    }
+
+    /// Live fiat rates, or `nil` when Coinbase is unavailable (the series then ends at
+    /// the latest daily snapshot).
+    private static func loadLiveFiat(_ service: CoinbaseService) async -> [String: Double]? {
+        do {
+            return try await service.exchangeRates()
+        } catch {
+            Log.history.notice("Live fiat rates unavailable: \(error.localizedDescription, privacy: .public)")
+            return nil
         }
     }
 

@@ -18,7 +18,7 @@ struct PersistenceTests {
         #expect(outcome == .seededDefaults)
         #expect(state == .initial)
         #expect(state.pairs == TrackedPair.defaults)
-        #expect(state.settings.refreshInterval == .fiveMinutes)
+        #expect(state.settings.refreshInterval == .thirtySeconds)
         #expect(FileManager.default.fileExists(atPath: store.fileURL.path))
         #expect(store.load().outcome == .loaded)
     }

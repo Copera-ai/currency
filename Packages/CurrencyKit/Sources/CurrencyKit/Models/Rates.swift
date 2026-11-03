@@ -2,9 +2,10 @@ import Foundation
 
 /// Where a rate came from.
 public enum RateSource: String, Codable, Hashable, Sendable, CaseIterable {
-    /// The daily currency API (fawazahmed0 currency-api). Fiat and long-tail crypto.
+    /// The daily currency API (fawazahmed0 currency-api). Fiat fallback, history and
+    /// long-tail crypto.
     case currencyAPI
-    /// Coinbase market data (live crypto prices).
+    /// Coinbase market data (live fiat exchange rates and crypto prices).
     case coinbase
 
     /// Human-readable attribution.
@@ -18,7 +19,11 @@ public enum RateSource: String, Codable, Hashable, Sendable, CaseIterable {
 
 /// The upstream sources the refresh engine talks to.
 public enum RateSourceKind: String, Codable, Hashable, Sendable, CaseIterable {
+    /// Daily fiat snapshots (currency API): fallback values and the change reference.
     case fiat
+    /// Live fiat exchange rates (Coinbase).
+    case liveFiat
+    /// Live crypto tickers (Coinbase).
     case crypto
 }
 
@@ -27,7 +32,8 @@ public struct AssetRate: Codable, Hashable, Sendable {
     /// How many USD one unit is worth.
     public var usdPerUnit: Double
     /// Change of ``usdPerUnit`` over 24h as a fraction (`0.0214` = +2.14%).
-    /// For daily fiat data this is the day-over-day change. `nil` when unknown.
+    /// For live fiat it is the change since the latest daily reference (00:00 UTC);
+    /// for daily fiat data it is the day-over-day change. `nil` when unknown.
     public var change24h: Double?
     /// When the value was observed (for daily data: midnight UTC of the data day).
     public var asOf: Date

@@ -1,6 +1,6 @@
 import Foundation
 
-/// Coinbase market data: batched live tickers and OHLC candles.
+/// Coinbase market data: live fiat exchange rates, batched live tickers and OHLC candles.
 struct CoinbaseService: Sendable {
     let http: any HTTPClient
 
@@ -17,6 +17,11 @@ struct CoinbaseService: Sendable {
             Log.network.notice("Coinbase batch rejected (HTTP \(status)); retrying products individually")
             return try await individually(productIDs)
         }
+    }
+
+    /// Live exchange rates as units per 1 USD, keyed by uppercase code.
+    func exchangeRates() async throws -> [String: Double] {
+        try CoinbaseExchangeRates.decode(try await http.fetch(Endpoints.coinbaseExchangeRates))
     }
 
     /// Candles for `productID` between `start` and `end`, oldest first.

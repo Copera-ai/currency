@@ -29,6 +29,10 @@ enum Endpoints {
 
     static let currencyNames = url("https://latest.currency-api.pages.dev/v1/currencies.min.json")
 
+    /// Live exchange rates for every currency Coinbase knows, as units per 1 USD.
+    /// Updated continuously (unlike the daily currency API).
+    static let coinbaseExchangeRates = url("https://api.coinbase.com/v2/exchange-rates?currency=USD")
+
     /// Batched ticker for several Coinbase products.
     static func coinbaseProducts(_ productIDs: [String]) -> URL {
         var components = URLComponents(string: "https://api.coinbase.com/api/v3/brokerage/market/products")

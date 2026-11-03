@@ -91,6 +91,7 @@ final class PopoverController: NSObject, NSPopoverDelegate {
 
     func popoverWillShow(_ notification: Notification) {
         model.isPopoverShown = true
+        model.store.requestRefresh(.popoverOpened)
     }
 
     func popoverDidShow(_ notification: Notification) {
