@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Copera Currency mark: two overlapping coins, the front one engraved with an
+       exchange glyph, on the 1024 pt Icon Composer canvas. One path per layer;
+       Branding/make-icons.sh splits them into CoperaCurrency/AppIcon.icon layers.
+       Coins: radius 212, centers (406, 406) back and (618, 618) front, 30 pt gap
+       around the front coin, 30 pt rim, 16 pt groove. Exchange glyph: knocked out
+       of the front face. All layers are even-odd. -->
+  <path id="back" fill="#000" fill-rule="evenodd" fill-opacity="0.7" d="M376.01 615.87A212 212 0 1 1 615.87 376.01A242 242 0 0 0 376.01 615.87ZM378.14 585.86A182 182 0 1 1 585.86 378.14A242 242 0 0 0 378.14 585.86ZM380.79 570.07A166 166 0 1 1 570.07 380.79A242 242 0 0 0 380.79 570.07Z"/>
+  <path id="rim" fill="#000" fill-rule="evenodd" d="M406 618A212 212 0 1 0 830 618A212 212 0 1 0 406 618ZM436 618A182 182 0 1 1 800 618A182 182 0 1 1 436 618Z"/>
+  <path id="face" fill="#000" fill-rule="evenodd" d="M452 618A166 166 0 1 0 784 618A166 166 0 1 0 452 618ZM523.38 575.09Q523.38 562.39 536.08 562.39L664.14 562.39Q666.14 562.39 666.14 560.39L666.14 549.15Q666.14 538.32 674.51 545.2L706.04 571.09Q712.62 576.5 706.04 581.91L674.51 607.8Q666.14 614.68 666.14 603.85L666.14 592.61Q666.14 590.61 664.14 590.61L536.08 590.61Q523.38 590.61 523.38 577.91ZM712.62 660.91Q712.62 673.61 699.92 673.61L571.86 673.61Q569.86 673.61 569.86 675.61L569.86 686.85Q569.86 697.68 561.49 690.8L529.96 664.91Q523.38 659.5 529.96 654.09L561.49 628.2Q569.86 621.32 569.86 632.15L569.86 643.39Q569.86 645.39 571.86 645.39L699.92 645.39Q712.62 645.39 712.62 658.09Z"/>
+</svg>

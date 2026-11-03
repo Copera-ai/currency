@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="660" height="400" viewBox="0 0 660 400">
+  <!-- DMG window background (660 x 400 pt). Finder draws the icons, 128 pt:
+       Copera Currency.app centered at (160, 190), the Applications link at (500, 190).
+       Rendered by make-icons.sh with resvg + SF Pro (dmg-background.png, @2x). -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FCFCFD"/>
+      <stop offset="1" stop-color="#F1F2F4"/>
+    </linearGradient>
+    <linearGradient id="arrow" x1="258" y1="0" x2="402" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#22B07E" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#0B8A5F" stop-opacity="0.9"/>
+    </linearGradient>
+  </defs>
+  <rect width="660" height="400" fill="url(#bg)"/>
+  <!-- Drop slots behind each icon and its Finder label. -->
+  <rect x="80" y="100" width="160" height="190" rx="30" fill="#0A3F4A" fill-opacity="0.035"/>
+  <rect x="420" y="100" width="160" height="190" rx="30" fill="#0A3F4A" fill-opacity="0.035"/>
+  <!-- Arrow from the app slot to the Applications slot. -->
+  <g fill="none" stroke="url(#arrow)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M266 190H392"/>
+    <path d="M380 177.5L393 190L380 202.5"/>
+  </g>
+  <text x="330" y="350" text-anchor="middle" font-family="SF Pro, System Font" font-size="13" letter-spacing="-0.08" fill="#1D1D1F" fill-opacity="0.5">Drag Copera Currency to Applications to install</text>
+</svg>

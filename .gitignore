@@ -20,7 +20,6 @@ build/
 
 # Swift Package Manager
 .swiftpm/
-Packages/
 Package.resolved
 
 # CocoaPods / Carthage (not used, but ignore defensively)

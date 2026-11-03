@@ -1,179 +1,164 @@
+<div align="center">
+
+<img src="docs/images/icon.png" width="128" alt="Copera Currency app icon">
+
 # Copera Currency
 
-A native macOS menu-bar app showing live currency & crypto pair rates (Fawaz fiat + Coinbase crypto) — iStat-Menus style, one menu-bar item per tracked pair — with a converter popover and a Settings window. Apple Silicon (M1+), macOS 14+.
+**Live fiat and crypto rates in your Mac's menu bar, with a converter one click away.**
 
-## Prerequisites
+[![macOS 26+](https://img.shields.io/badge/macOS-26%2B-0B8A5F?logo=apple&logoColor=white)](#requirements)
+[![Apple Silicon](https://img.shields.io/badge/Apple%20Silicon-arm64-0B8A5F)](#requirements)
+[![Swift 6](https://img.shields.io/badge/Swift-6-F05138?logo=swift&logoColor=white)](https://www.swift.org)
+[![Latest release](https://img.shields.io/github/v/release/Copera-ai/currency?color=2CC98F&label=release)](https://github.com/Copera-ai/currency/releases/latest)
+[![License: MIT](https://img.shields.io/badge/license-MIT-lightgrey)](LICENSE)
 
-- macOS 14.0+ (Apple Silicon, arm64 only)
-- Xcode 26+ (the full IDE, not just the Command Line Tools)
-- [XcodeGen](https://github.com/yonaskolb/XcodeGen): `brew install xcodegen`
+<img src="docs/images/hero.png" alt="Copera Currency: USD/BRL and BTC/USD in the menu bar, with the converter popover open" width="100%">
 
----
+</div>
 
-## Desenvolvimento
+## Download
 
-> Esta seção é a referência pessoal do dono do projeto. Se você vem de React Native + Node, leia o "Conceito-chave" primeiro — o fluxo é bem diferente.
+**[Download the latest release](https://github.com/Copera-ai/currency/releases/latest)**: open the `.dmg` and drag Copera Currency to Applications.
 
-### Conceito-chave (vindo de React Native / Node)
+- Signed with a Developer ID and notarized by Apple, so it opens without Gatekeeper warnings.
+- Updates itself through [Sparkle](https://sparkle-project.org). You can turn automatic checks off in Settings › General.
+- It lives in the menu bar only, with no Dock icon. Click a rate to open the converter.
 
-App nativo é **compilado** e **não tem hot reload**. O app que está rodando continua executando o **código antigo** até você **parar e rodar de novo** (⌘R no Xcode). Salvar o arquivo `.swift` não muda nada no app que já está aberto.
+### Requirements
 
-- Não é como **Fast Refresh** do React Native (que recarrega a tela ao salvar).
-- Não é como **nodemon** do Node (que reinicia o processo ao salvar).
-- O ciclo aqui é: **editar → parar → buildar → rodar de novo**.
+macOS 26 (Tahoe) or later on an Apple Silicon Mac (M1 or newer).
 
-A boa notícia: build incremental é rápido, então o ciclo Stop → ⌘R leva poucos segundos depois do primeiro build.
+## Features
 
-> Existe uma exceção para iterar **só o visual**: o **Canvas / `#Preview`** do Xcode (veja mais abaixo). Esse é o mais perto de um "hot reload" que você tem aqui — mas só pra renderizar uma view isolada, não pra rodar o app inteiro.
+- **One menu bar item per pair.** Show `USD/BRL 5.44 ▲`, a symbol (`R$ 5.44`), a flag or just the value, with an optional up/down arrow. ⌘-drag items to reorder them.
+- **Converter.** Type an amount (simple math such as `250*4` or `(12+8)/2` works), pick currencies from a searchable list, swap with one click and copy the result with ⌘C.
+- **Real 24h change.** Crypto uses Coinbase's 24-hour move, and fiat compares today's rates with yesterday's.
+- **Sparklines and charts.** Every pair has a 24h sparkline. Expand a pair for a full chart with 24H, 7D, 30D and 90D ranges.
+- **170+ currencies.** 150+ fiat currencies with flags, plus BTC, ETH, SOL, XRP, DOGE and other major crypto assets. Any pair works, including crypto to fiat (`BTC/BRL`).
+- **Your pairs, your order.** Favorite pairs, drag to reorder, and choose which ones appear in the menu bar. Right-click a pair to copy its rate or load it into the converter.
+- **Native Liquid Glass design.** Light, Dark or System appearance, six accent colors and a Reduce transparency option.
+- **Stays current.** Refreshes every 1 to 60 minutes, right after your Mac wakes and when the network comes back. The last rates stay visible offline, marked as stale.
+- **Fits in.** Open at login, a global shortcut for the converter, and full keyboard navigation.
 
-### Xcode é a ferramenta principal
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/popover-light.png" alt="Converter popover in Light mode"></td>
+    <td width="50%"><img src="docs/images/popover-dark.png" alt="Converter popover in Dark mode"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Converter and tracked pairs (Light)</sub></td>
+    <td align="center"><sub>The same popover in Dark mode</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/chart.png" alt="BTC/USD expanded with a 24-hour chart"></td>
+    <td><img src="docs/images/picker.png" alt="Searchable currency picker"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Expanded pair with a 24H/7D/30D/90D chart</sub></td>
+    <td align="center"><sub>Searchable currency picker</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/settings-currencies.png" alt="Settings: Currencies tab"></td>
+    <td><img src="docs/images/settings-appearance.png" alt="Settings: Appearance tab in Dark mode"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Settings › Currencies: order, favorites, menu bar</sub></td>
+    <td align="center"><sub>Settings › Appearance: theme, accent, label format</sub></td>
+  </tr>
+</table>
 
-O **Xcode** é onde você compila, roda, debuga e faz preview visual. É o equivalente do "tudo em um" aqui.
+## Keyboard shortcuts
 
-Você **pode** editar arquivos `.swift` no VS Code / Cursor (e é confortável vindo de RN/Node), mas **build, run e debug são no Xcode**. Na prática, muita gente edita no editor que prefere e mantém o Xcode aberto só pra dar ⌘R e ver os logs.
-
-### Abrir o projeto
-
-```bash
-cd /Users/christiancuri/workspace/copera/copera-currency
-open CoperaCurrency.xcodeproj
-```
-
-Se o `CoperaCurrency.xcodeproj` **não existir** (ou você adicionou/removeu arquivos), gere ele antes:
-
-```bash
-xcodegen generate
-```
-
-O `.xcodeproj` é **gerado** a partir do `project.yml` e não é versionado (gitignored) — por isso pode não estar lá num clone novo.
-
-### Rodar (⌘R)
-
-No Xcode, na barra de cima:
-
-1. Confira que o **scheme** selecionado é **CoperaCurrency**.
-2. Confira que o **destino** é **My Mac**.
-3. Aperte **⌘R** (Build + Run).
-
-O app **aparece na barra de menu** (canto superior direito da tela), perto do relógio. Ele **não tem ícone no Dock** e **não abre janela** ao iniciar — isso é de propósito: é um app de barra de menu (menu-bar app). Clique no item da barra pra abrir o popover.
-
-### Parar (⌘.)
-
-Pare com **⌘.** ou o botão **⏹ Stop** no Xcode.
-
-> AVISO IMPORTANTE: se você não parar pelo Stop e rodar de novo, fica uma **instância antiga** ainda viva na barra de menu — e você acaba olhando pra "versão velha" achando que sua mudança não funcionou. Sempre **Stop antes de rodar de novo**.
-
-Pra matar qualquer instância presa na barra de menu:
-
-```bash
-killall "Copera Currency"
-```
-
-### O ciclo do dia a dia
-
-```
-mudou código  →  Stop (⌘.)  →  ⌘R  →  testa  →  repete
-```
-
-Build incremental é rápido, então esse loop é curto.
-
-### Logs e debug
-
-- **`⌘⇧Y`** abre a **Debug Area** (o console). Tudo que você `print(...)` no Swift aparece aí.
-- Clique na **margem esquerda** de uma linha de código pra colocar um **breakpoint**. Quando a execução chegar nele, o app pausa e você consegue **inspecionar as variáveis** na Debug Area.
-
-### Rodar os testes
-
-No Xcode: **⌘U**.
-
-Ou pela linha de comando:
-
-```bash
-xcodebuild test -project CoperaCurrency.xcodeproj -scheme CoperaCurrency -destination 'platform=macOS,arch=arm64'
-```
-
-### `#Preview` / Canvas — o "hot reload" do visual
-
-O Xcode tem o **Canvas**: você abre um arquivo de view e ele mostra a view **renderizada ao vivo**, atualizando **enquanto você digita**, **sem rodar o app inteiro**. É o recurso mais parecido com hot reload que existe aqui — ótimo pra iterar layout, cores e espaçamentos rápido.
-
-- Atalho pra mostrar/esconder: **Editor → Canvas** (**⌥⌘↩**).
-- Pra funcionar, a view precisa de um bloco **`#Preview { ... }`** com dados de exemplo. É um trecho que diz ao Xcode como instanciar a view isolada.
-
-Exemplo genérico de como é um `#Preview`:
-
-```swift
-#Preview {
-    MinhaView(/* dados de exemplo */)
-}
-```
-
-> No momento as views **ainda não têm** blocos `#Preview`. Eles podem ser adicionados por view conforme você quiser iterar o visual no Canvas (um `#Preview` por arquivo de view). _Não precisa adicionar agora — isto é só o conceito._
-
-### Build pela linha de comando (alternativa ao Xcode)
-
-Dá pra buildar e abrir o app sem o Xcode:
-
-```bash
-xcodebuild -project CoperaCurrency.xcodeproj -scheme CoperaCurrency -configuration Debug -derivedDataPath build build
-open "build/Build/Products/Debug/Copera Currency.app"
-```
-
-A pasta `build/` é descartável (gitignored). No dia a dia, o jeito recomendado é rodar pelo **Xcode com ⌘R** — você ganha logs, breakpoints e o ciclo Stop/Run integrado.
-
-### XcodeGen (de onde vem o `.xcodeproj`)
-
-O `CoperaCurrency.xcodeproj` é **gerado** a partir do `project.yml` (e é gitignored). Você normalmente **não edita** o `.xcodeproj` na mão.
-
-- Editar arquivos `.swift` **já existentes** e dar **⌘R** funciona direto, sem regenerar nada.
-- Só rode `xcodegen generate` quando você **adicionar ou remover arquivos**, ou **mudar build settings** no `project.yml`.
-
-```bash
-xcodegen generate
-```
-
-Os arquivos `.swift` são pegos por globbing da pasta `CoperaCurrency/`, então arquivo novo só precisa de um `xcodegen generate` pra entrar no projeto.
-
-### Mapa das pastas (`CoperaCurrency/`)
-
-```
-CoperaCurrency/
-  App/           Entrada do app + AppDelegate
-  MenuBar/       Itens da barra de menu + controller do popover
-  UI/
-    Popover/     PopoverView (o conversor que abre ao clicar)
-    Settings/    SettingsRoot + as 4 abas
-  Components/    Botões / toggles / badges reutilizáveis
-  Theme/         Theme.swift = todas as cores (claro/escuro)
-  Models/        Modelos de moeda / par / cotação
-  Networking/    Providers de cotação (Fawaz fiat, Coinbase crypto)
-  Store/         Dados e lógica — RatesStore.swift é o "cérebro"
-```
-
-Bons arquivos pra começar a mexer **no visual**:
-
-- `CoperaCurrency/UI/Popover/PopoverView.swift`
-- `CoperaCurrency/UI/Settings/Settings*Tab.swift`
-- `CoperaCurrency/Theme/Theme.swift`
-
-### Assinatura / distribuição
-
-Hoje o app roda como **build de desenvolvimento** (não assinado para distribuição). Assinatura **Developer ID** + **notarização** + **auto-update (Sparkle)** virão numa fase posterior.
-
----
-
-## Referência rápida (atalhos do Xcode)
-
-| Ação | Atalho |
+| Shortcut | Action |
 | --- | --- |
-| Build + Run | ⌘R |
-| Stop | ⌘. |
-| Rodar testes | ⌘U |
-| Debug Area (console) | ⌘⇧Y |
-| Mostrar/esconder Canvas | ⌥⌘↩ |
+| Your choice (Settings › General) | Open the converter from anywhere (unset by default) |
+| ⌘C | Copy the converted amount (when no text is selected) |
+| ⌘R | Refresh rates |
+| ⌘, | Open Settings |
+| ⌘Q | Quit |
+| ↑ / ↓, then Return or Space | Move through pairs and expand or collapse a chart |
+| Type, then ↑ / ↓ and Return | Search and pick in the currency picker |
+| Esc | Close the picker or the popover |
+| ⌘-drag a menu bar item | Reorder menu bar items |
 
-## Project facts
+## Data sources and privacy
 
-- **Scheme:** `CoperaCurrency`
-- **Product name:** `Copera Currency`
-- **Bundle id:** `ai.copera.currency`
-- **Deployment target:** macOS 14.0 (arm64 only)
+| Data | Source |
+| --- | --- |
+| Fiat rates, day-over-day change and history | [Fawaz Ahmed's currency-api](https://github.com/fawazahmed0/exchange-api) (daily snapshots, via Cloudflare Pages with a jsDelivr fallback) |
+| Crypto prices, 24h change and chart candles | [Coinbase](https://www.coinbase.com) public market data |
+
+- **No accounts and no API keys.** Both sources are free and public.
+- **No tracking or analytics.** The app only contacts the two rate sources above and, for updates, this repository's GitHub Releases.
+- Your pairs and settings are stored locally in `~/Library/Application Support/ai.copera.currency`.
+- Fiat sources publish once a day. Rates are for information only, not for trading.
+
+## Build from source
+
+Requirements: macOS 26+, Apple Silicon, Xcode 26+ and
+
+```sh
+brew install xcodegen swiftlint
+```
+
+| Command | What it does |
+| --- | --- |
+| `make gen` | Generate `CoperaCurrency.xcodeproj` from `project.yml` (the project is not committed) |
+| `make build` | Unsigned Debug build (arm64) into `build/DerivedData` |
+| `make run` | `make build`, then open the app |
+| `make test` | Run the `CurrencyKit` test suite (`swift test`) |
+| `make lint` | `swiftlint lint --strict` |
+| `make clean` | Remove `build/`, the generated project and the package build |
+
+To work in Xcode, run `make gen`, open `CoperaCurrency.xcodeproj` and run the `CoperaCurrency` scheme. Run `make gen` again after adding or removing files.
+
+Debug builds accept launch arguments that drive the UI for screenshots and QA, for example `-UITestOpenPopover YES -UITestAppearance dark`. See [`DebugLaunchHooks.swift`](CoperaCurrency/App/DebugLaunchHooks.swift).
+
+## Project structure
+
+```
+CoperaCurrency/          The app (SwiftUI + AppKit)
+  App/                   Entry point, AppDelegate, app model, window coordination
+  MenuBar/               Status items and the shared popover
+  Popover/               Converter, pairs list, sparklines and charts
+  Settings/              General, Currencies, Appearance and About tabs
+  Components/            Currency picker, badges, palette
+  Updates/               Sparkle updater
+Packages/CurrencyKit/    All logic and its tests: networking, rates engine, history,
+                         formatting, persistence, refresh scheduling
+Branding/                Icon sources, menu bar glyphs, DMG background
+scripts/                 release.sh, publish.sh, sparkle-tools.sh
+project.yml              XcodeGen spec
+```
+
+## Releasing
+
+Releases are tagged `v<x.y.z>` and published as GitHub Releases. The build number is the commit count, so it always grows.
+
+```sh
+make release VERSION=1.1.0              # signed, notarized and stapled DMG + zip + checksums in build/release/dist
+make publish VERSION=1.1.0 DRY_RUN=1    # preview the whole publish without building or uploading
+make publish VERSION=1.1.0              # build, extend the Sparkle appcast, tag, push and create the release
+```
+
+Before publishing, add a `## 1.1.0` section to [`CHANGELOG.md`](CHANGELOG.md): it becomes both the GitHub Release notes and the Sparkle update notes. `make publish` runs on a clean `main` that matches `origin/main`.
+
+One-time setup:
+
+- A Developer ID signing identity for the team in [`scripts/release.sh`](scripts/release.sh) (`TEAM_ID`).
+- A notarytool keychain profile named `apple-notary` (`xcrun notarytool store-credentials apple-notary ...`). Override it with `NOTARY_PROFILE`.
+- The Sparkle EdDSA key in the login keychain under the account `copera-currency`. `make sparkle-key` prints the public key (`SUPublicEDKey`) and creates the key on first use.
+
+See [`scripts/release.sh`](scripts/release.sh) and [`scripts/publish.sh`](scripts/publish.sh) for every step and environment variable.
+
+## Acknowledgements
+
+- [currency-api](https://github.com/fawazahmed0/exchange-api) by Fawaz Ahmed for free daily fiat rates.
+- [Coinbase](https://www.coinbase.com) for public crypto market data.
+- [Sparkle](https://sparkle-project.org) for updates.
+- [KeyboardShortcuts](https://github.com/sindresorhus/KeyboardShortcuts) by Sindre Sorhus.
+- [XcodeGen](https://github.com/yonaskolb/XcodeGen) and [SwiftLint](https://github.com/realm/SwiftLint).
+
+## License
+
+[MIT](LICENSE) © Christian Curi

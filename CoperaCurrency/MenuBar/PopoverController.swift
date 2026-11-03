@@ -1,112 +1,108 @@
 import AppKit
 import SwiftUI
 
-/// Owns the single shared transient ``NSPopover`` used by every status item.
-///
-/// One popover is reused across all status items: `toggle(relativeTo:)` shows it
-/// anchored to a button, hides it if it's already shown for that same button, or
-/// moves it when a different button is clicked. The anchored button is
-/// highlighted while the popover is open and un-highlighted on close (via the
-/// popover delegate).
-///
-/// Phase 3 hosts the real ``PopoverView``. The content is an
-/// `NSHostingController` whose SwiftUI tree drives the popover's intrinsic height
-/// (368 wide) via `sizingOptions = .preferredContentSize`.
-///
-/// Vibrancy: the `NSPopover` already provides a vibrant backing, and the SwiftUI
-/// `PanelBackground` layers `.ultraThinMaterial` (or a solid fill when reduce-
-/// transparency is on) over it. This matches the design's translucent panel
-/// without the auto-sizing fragility of wrapping the hosting view in a manual
-/// `NSVisualEffectView` container.
+/// The single popover shared by every status item. It re-anchors to whichever item
+/// was clicked and sizes itself from the SwiftUI content (rows expand in place).
 @MainActor
 final class PopoverController: NSObject, NSPopoverDelegate {
-    /// Fixed popover width per the design (intrinsic height).
-    static let width: CGFloat = 368
+    private let popover = NSPopover()
+    private let model: AppModel
+    private weak var anchor: NSStatusBarButton?
+    /// Opened with the global shortcut: focus the amount once the popover is key.
+    private var focusesAmount = false
+    private var activationObserver: (any NSObjectProtocol)?
 
-    private let popover: NSPopover
-    private let store: RatesStore
-    private let settings: AppSettings
-    /// Opens the Settings window at an optional target tab (threaded in from
-    /// `AppDelegate`, since the popover can't reach `SettingsWindowController`
-    /// directly). A `nil` tab means "the last-viewed tab". Closes the popover
-    /// before opening.
-    private let onOpenSettings: (SettingsTab?) -> Void
-
-    /// The button the popover is currently anchored to (for highlight bookkeeping).
-    private weak var anchorButton: NSStatusBarButton?
-
-    init(store: RatesStore, settings: AppSettings, onOpenSettings: @escaping (SettingsTab?) -> Void = { _ in }) {
-        self.store = store
-        self.settings = settings
-        self.onOpenSettings = onOpenSettings
-        self.popover = NSPopover()
+    init(model: AppModel) {
+        self.model = model
         super.init()
-
+        let host = NSHostingController(rootView: PopoverView().environment(model).environment(model.store))
+        host.sizingOptions = [.preferredContentSize]
+        popover.contentViewController = host
         popover.behavior = .transient
         popover.animates = true
         popover.delegate = self
-        popover.contentViewController = makeContentController()
+        // Activation is asynchronous (and cooperative): make the popover key once it lands.
+        activationObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.takeKeyFocus() }
+        }
     }
 
-    /// Build the hosting controller for the real popover UI. The popover is sized
-    /// from the SwiftUI content's intrinsic size (width pinned to ``width``).
-    private func makeContentController() -> NSViewController {
-        let root = PopoverView(
-            store: store,
-            settings: settings,
-            onOpenSettings: { [weak self] tab in self?.openSettings(tab) }
-        )
-        .themedRoot(settings: settings)
+    var isShown: Bool { popover.isShown }
 
-        let hosting = NSHostingController(rootView: root)
-        // Drive the popover's height from the SwiftUI content's intrinsic size.
-        hosting.sizingOptions = [.preferredContentSize]
-        return hosting
+    /// Applies the user's Light/Dark choice to the popover only (never to the menu bar).
+    func setAppearance(_ appearance: NSAppearance?) {
+        popover.appearance = appearance
     }
 
-    /// Close the popover, then open Settings (optionally at a specific tab).
-    private func openSettings(_ tab: SettingsTab?) {
-        close()
-        onOpenSettings(tab)
-    }
-
-    /// Show or hide the popover relative to the given status-item button.
-    ///
-    /// - Already shown for this button → close.
-    /// - Shown for a different button → move (close, re-anchor, reopen).
-    /// - Hidden → show anchored to this button.
-    func toggle(relativeTo button: NSStatusBarButton) {
-        if popover.isShown {
-            if anchorButton === button {
-                close()
-                return
-            }
+    /// A click on the anchored item while the popover is open closes it. The transient
+    /// popover does not close on that item's mouse down (see ``popoverShouldClose(_:)``),
+    /// so the click's mouse up sees it still shown.
+    func toggle(from button: NSStatusBarButton) {
+        if popover.isShown, anchor === button {
             close()
+        } else {
+            show(from: button)
         }
-        show(relativeTo: button)
     }
 
-    private func show(relativeTo button: NSStatusBarButton) {
-        anchorButton = button
-        button.highlight(true)
+    /// Shows the popover under `button`. `focusingAmount` (global shortcut) puts the
+    /// keyboard focus in the converter's amount field.
+    func show(from button: NSStatusBarButton, focusingAmount: Bool = false) {
+        if popover.isShown, anchor !== button { popover.close() }
+        anchor?.highlight(false)
+        anchor = button
+        focusesAmount = focusingAmount
+        // An accessory app must be active for the popover to take keyboard focus. From a
+        // status item click or the global shortcut this is a response to user input, which
+        // cooperative activation honors; `takeKeyFocus()` runs again once it lands.
+        NSApp.activate()
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        button.highlight(true)
+        takeKeyFocus()
     }
 
-    /// Close the popover if shown (e.g. before opening the Settings window).
     func close() {
-        if popover.isShown {
-            popover.performClose(nil)
-        }
-        anchorButton?.highlight(false)
-        anchorButton = nil
+        guard popover.isShown else { return }
+        popover.performClose(nil)
+    }
+
+    /// Makes the popover window key and, when requested, focuses the amount field.
+    private func takeKeyFocus() {
+        guard popover.isShown, let window = popover.contentViewController?.view.window else { return }
+        window.makeKey()
+        guard focusesAmount else { return }
+        model.amountFocusRequest += 1
+        // Keep asking until the app is actually active (the field can't take typing before).
+        if NSApp.isActive { focusesAmount = false }
     }
 
     // MARK: - NSPopoverDelegate
 
+    /// Keeps the transient popover open on a mouse down on its own anchor item: the
+    /// item's mouse up then toggles it closed instead of closing and reopening it.
+    func popoverShouldClose(_ popover: NSPopover) -> Bool {
+        guard let anchor, let event = NSApp.currentEvent, event.type == .leftMouseDown,
+              !event.modifierFlags.contains(.control), event.window === anchor.window
+        else { return true }
+        return !anchor.bounds.contains(anchor.convert(event.locationInWindow, from: nil))
+    }
+
+    func popoverWillShow(_ notification: Notification) {
+        model.isPopoverShown = true
+    }
+
+    func popoverDidShow(_ notification: Notification) {
+        takeKeyFocus()
+    }
+
     func popoverDidClose(_ notification: Notification) {
-        // Transient dismissal (click-outside, Esc) routes here too; drop the
-        // active button highlight.
-        anchorButton?.highlight(false)
-        anchorButton = nil
+        // A close of the previous anchor can land after the popover re-opened elsewhere.
+        guard !popover.isShown else { return }
+        anchor?.highlight(false)
+        focusesAmount = false
+        model.isPopoverShown = false
+        model.pickerSide = nil
     }
 }
