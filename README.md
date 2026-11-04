@@ -16,6 +16,12 @@
 
 </div>
 
+## See it in action
+
+[![Watch the one-minute Copera Currency demo](docs/images/demo-poster.jpg)](https://github.com/Copera-ai/currency/releases/download/v1.0.1/Copera-Currency-demo.mp4)
+
+<sub>One-minute tour of the menu bar, converter, charts and settings. Click to play.</sub>
+
 ## Download
 
 **[Download the latest release](https://github.com/Copera-ai/currency/releases/latest)**: open the `.dmg` and drag Copera Currency to Applications.
