@@ -18,9 +18,9 @@
 
 ## See it in action
 
-[![Watch the one-minute Copera Currency demo](docs/images/demo-poster.jpg)](https://github.com/Copera-ai/currency/releases/download/v1.0.1/Copera-Currency-demo.mp4)
+https://github.com/user-attachments/assets/3ba3607a-ea30-484b-872e-0aa4ee692538
 
-<sub>One-minute tour of the menu bar, converter, charts and settings. Click to play.</sub>
+<sub>One-minute tour of the menu bar, converter, charts and settings.</sub>
 
 ## Download
 
